@@ -110,22 +110,45 @@ def serve_download(filepath):
 
 @app.route("/api/positions", methods=["GET"])
 def api_get_positions():
-    """Return all positions."""
+    """Return all positions with image counts and missing image details."""
     positions = load_positions()
     folder_stats = get_folder_stats(settings["base_download_dir"])
+    target_count = request.args.get("target", settings["images_per_position"], type=int)
+
     result = []
+    incomplete_count = 0
+    total_missing = 0
+
     for idx, pos in enumerate(positions):
         sanitized = pos.strip()
         for char in '<>:"/\\|?*':
             sanitized = sanitized.replace(char, "-")
         count = folder_stats.get(sanitized, {}).get("count", 0)
+        missing = max(0, target_count - count)
+        is_incomplete = count < target_count
+
+        if is_incomplete:
+            incomplete_count += 1
+            total_missing += missing
+
         result.append({
             "id": idx,
             "name": pos,
             "folder_name": sanitized,
             "images_downloaded": count,
+            "target_images": target_count,
+            "missing_images": missing,
+            "is_incomplete": is_incomplete,
         })
-    return jsonify({"positions": result, "total": len(result)})
+
+    return jsonify({
+        "positions": result,
+        "total": len(result),
+        "target_per_position": target_count,
+        "incomplete_total": incomplete_count,
+        "complete_total": len(result) - incomplete_count,
+        "total_missing_images": total_missing,
+    })
 
 
 @app.route("/api/positions", methods=["POST"])
@@ -169,13 +192,16 @@ def api_scrape_start():
     if active_scraper and active_scraper.get_progress().get("status") == "running":
         return jsonify({"error": "A scraping job is already running"}), 409
 
-    data = request.get_json()
+    data = request.get_json() or {}
     source = data.get("source", "pinterest")
     position_ids = data.get("positions", [])
     count = data.get("count", settings["images_per_position"])
     search_suffix = data.get("search_suffix", settings["search_suffix"])
+    top_up = data.get("top_up", True)
+    only_incomplete = data.get("only_incomplete", False)
 
     all_positions = load_positions()
+    folder_stats = get_folder_stats(settings["base_download_dir"])
 
     # Resolve position IDs to names
     if position_ids:
@@ -183,8 +209,20 @@ def api_scrape_start():
     else:
         selected = all_positions
 
+    # Filter only incomplete positions if requested
+    if only_incomplete:
+        filtered_selected = []
+        for pos in selected:
+            sanitized = pos.strip()
+            for char in '<>:"/\\|?*':
+                sanitized = sanitized.replace(char, "-")
+            cur_count = folder_stats.get(sanitized, {}).get("count", 0)
+            if cur_count < count:
+                filtered_selected.append(pos)
+        selected = filtered_selected
+
     if not selected:
-        return jsonify({"error": "No positions selected"}), 400
+        return jsonify({"error": "No positions selected or all selected positions are already complete"}), 400
 
     # Create scraper
     delay = settings["download_delay"]
@@ -212,17 +250,24 @@ def api_scrape_start():
         global scrape_results
         base_dir = settings["base_download_dir"]
         os.makedirs(base_dir, exist_ok=True)
-        scrape_results = active_scraper.scrape_positions(selected, base_dir, count, search_suffix=search_suffix)
+        scrape_results = active_scraper.scrape_positions(
+            selected,
+            base_dir,
+            count,
+            search_suffix=search_suffix,
+            top_up=top_up,
+        )
 
     scrape_thread = threading.Thread(target=run_scrape, daemon=True)
     scrape_thread.start()
 
     return jsonify({
-        "message": f"Started {source} scraping for {len(selected)} positions with query suffix '{search_suffix}'",
+        "message": f"Started {source} scraping for {len(selected)} positions (top_up={top_up})",
         "source": source,
         "positions_count": len(selected),
         "images_per_position": count,
         "search_suffix": search_suffix,
+        "top_up": top_up,
     })
 
 

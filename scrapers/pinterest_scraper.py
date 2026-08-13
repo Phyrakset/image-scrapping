@@ -22,7 +22,7 @@ class PinterestScraper(BaseScraper):
     def source_name(self) -> str:
         return "Pinterest"
 
-    def scrape(self, query: str, output_dir: str, num_images: int) -> List[str]:
+    def scrape(self, query: str, output_dir: str, num_images: int, start_offset: int = 0) -> List[str]:
         """
         Search Pinterest for images matching the query and download them into output_dir.
         """

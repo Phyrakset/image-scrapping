@@ -15,6 +15,7 @@ const state = {
     eventSource: null,
     galleryPosition: null,
     logs: [],
+    posFilter: 'all', // 'all', 'complete', 'incomplete'
 };
 
 // ============================================================
@@ -38,7 +39,7 @@ const API = {
         return res.json();
     },
 
-    getPositions: () => API.get('/api/positions'),
+    getPositions: (target = 40) => API.get(`/api/positions?target=${target}`),
     addPosition: (name) => API.post('/api/positions', { name }),
     deletePosition: (id) => API.del(`/api/positions/${id}`),
     getStats: () => API.get('/api/stats'),
@@ -110,44 +111,82 @@ function updateStatusBadge(status) {
 // ============================================================
 async function loadPositions() {
     try {
-        const data = await API.getPositions();
+        const target = parseInt(document.getElementById('scrape-count')?.value || '40');
+        const data = await API.getPositions(target);
         state.positions = data.positions || [];
+
+        // Update counts in tabs
+        const completeCnt = data.complete_total || 0;
+        const incompleteCnt = data.incomplete_total || 0;
+
+        if (document.getElementById('cnt-filter-all')) document.getElementById('cnt-filter-all').textContent = state.positions.length;
+        if (document.getElementById('cnt-filter-complete')) document.getElementById('cnt-filter-complete').textContent = completeCnt;
+        if (document.getElementById('cnt-filter-incomplete')) document.getElementById('cnt-filter-incomplete').textContent = incompleteCnt;
+
         renderPositions();
     } catch (err) {
         console.error('Positions load error:', err);
     }
 }
 
-function renderPositions(filter = '') {
+function setPosFilter(filter) {
+    state.posFilter = filter;
+    ['all', 'complete', 'incomplete'].forEach(f => {
+        const btn = document.getElementById(`tab-filter-${f}`);
+        if (btn) btn.classList.toggle('active', f === filter);
+    });
+    renderPositions();
+}
+
+function renderPositions(searchFilter = '') {
     const list = document.getElementById('position-list');
     if (!list) return;
 
-    const filtered = filter
-        ? state.positions.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()))
-        : state.positions;
+    const targetCount = parseInt(document.getElementById('scrape-count')?.value || '40');
+
+    let filtered = state.positions;
+
+    // Apply search filter
+    if (searchFilter) {
+        filtered = filtered.filter(p => p.name.toLowerCase().includes(searchFilter.toLowerCase()));
+    }
+
+    // Apply tab filter
+    if (state.posFilter === 'complete') {
+        filtered = filtered.filter(p => p.images_downloaded >= targetCount);
+    } else if (state.posFilter === 'incomplete') {
+        filtered = filtered.filter(p => p.images_downloaded < targetCount);
+    }
 
     if (filtered.length === 0) {
         list.innerHTML = `
             <div class="empty-state">
                 <div class="empty-icon">📋</div>
-                <p>${filter ? 'No positions match your search' : 'No positions found'}</p>
+                <p>${searchFilter ? 'No positions match your search' : 'No positions found for this filter'}</p>
             </div>`;
         return;
     }
 
-    list.innerHTML = filtered.map(pos => `
-        <div class="position-item" data-id="${pos.id}">
+    list.innerHTML = filtered.map(pos => {
+        const count = pos.images_downloaded || 0;
+        const isInc = count < targetCount;
+        const missing = Math.max(0, targetCount - count);
+
+        return `
+        <div class="position-item ${isInc ? 'is-incomplete' : ''}" data-id="${pos.id}">
             <input type="checkbox" ${state.selectedPositions.has(pos.id) ? 'checked' : ''}
                    onchange="togglePosition(${pos.id})" />
             <span class="pos-name">${escapeHtml(pos.name)}</span>
-            <span class="pos-count ${pos.images_downloaded > 0 ? 'has-images' : ''}">
-                ${pos.images_downloaded > 0 ? `📷 ${pos.images_downloaded}` : '0 images'}
+            <span class="pos-count ${count > 0 ? (isInc ? 'has-images incomplete-badge' : 'has-images') : ''}">
+                ${count > 0 ? `📷 ${count}/${targetCount}` : `0/${targetCount}`}
+                ${isInc ? ` <span style="color:#f59e0b;font-weight:bold;margin-left:4px;">(Missing ${missing})</span>` : ''}
             </span>
             <button class="pos-delete" onclick="deletePosition(${pos.id}, '${escapeHtml(pos.name)}')" title="Delete">
                 🗑️
             </button>
         </div>
-    `).join('');
+    `;
+    }).join('');
 
     updateSelectCount();
 }
@@ -162,18 +201,43 @@ function togglePosition(id) {
 }
 
 function selectAllPositions() {
-    const filter = document.getElementById('position-search')?.value || '';
-    const filtered = filter
-        ? state.positions.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()))
-        : state.positions;
+    const searchFilter = document.getElementById('position-search')?.value || '';
+    const targetCount = parseInt(document.getElementById('scrape-count')?.value || '40');
+
+    let filtered = state.positions;
+    if (searchFilter) {
+        filtered = filtered.filter(p => p.name.toLowerCase().includes(searchFilter.toLowerCase()));
+    }
+    if (state.posFilter === 'complete') {
+        filtered = filtered.filter(p => p.images_downloaded >= targetCount);
+    } else if (state.posFilter === 'incomplete') {
+        filtered = filtered.filter(p => p.images_downloaded < targetCount);
+    }
+
     filtered.forEach(p => state.selectedPositions.add(p.id));
-    renderPositions(filter);
+    renderPositions(searchFilter);
+}
+
+function selectIncompletePositions() {
+    const targetCount = parseInt(document.getElementById('scrape-count')?.value || '40');
+    state.selectedPositions.clear();
+
+    const incomplete = state.positions.filter(p => (p.images_downloaded || 0) < targetCount);
+    incomplete.forEach(p => state.selectedPositions.add(p.id));
+
+    setPosFilter('incomplete');
+    showToast(`Selected ${incomplete.length} positions with < ${targetCount} images`, 'info');
+}
+
+function selectIncompleteForScrape() {
+    selectIncompletePositions();
+    navigateTo('scrape');
 }
 
 function deselectAllPositions() {
     state.selectedPositions.clear();
-    const filter = document.getElementById('position-search')?.value || '';
-    renderPositions(filter);
+    const searchFilter = document.getElementById('position-search')?.value || '';
+    renderPositions(searchFilter);
 }
 
 function updateSelectCount() {
@@ -219,12 +283,19 @@ async function deletePosition(id, name) {
 // Scraping
 // ============================================================
 async function loadScrapePanel() {
-    if (state.positions.length === 0) {
-        const data = await API.getPositions();
-        state.positions = data.positions || [];
-    }
+    const target = parseInt(document.getElementById('scrape-count')?.value || '40');
+    const data = await API.getPositions(target);
+    state.positions = data.positions || [];
+
     updateScrapeUI();
     checkScrapeStatus();
+}
+
+function onScrapeCountChange() {
+    const count = parseInt(document.getElementById('scrape-count')?.value || '40');
+    document.querySelectorAll('.lbl-target-count').forEach(el => el.textContent = count);
+    loadPositions();
+    updateScrapeUI();
 }
 
 function selectSource(source) {
@@ -235,8 +306,10 @@ function selectSource(source) {
 }
 
 async function startScrape() {
-    const count = parseInt(document.getElementById('scrape-count')?.value || '30');
+    const count = parseInt(document.getElementById('scrape-count')?.value || '40');
     const searchSuffix = document.getElementById('scrape-suffix')?.value?.trim() ?? 'Single Person Asian';
+    const topUp = document.getElementById('scrape-top-up')?.checked ?? true;
+
     const positionIds = state.selectedPositions.size > 0
         ? Array.from(state.selectedPositions)
         : state.positions.map(p => p.id);
@@ -252,6 +325,7 @@ async function startScrape() {
             positions: positionIds,
             count: count,
             search_suffix: searchSuffix,
+            top_up: topUp,
         });
 
         if (result.error) {
@@ -259,8 +333,8 @@ async function startScrape() {
             return;
         }
 
-        showToast(`Started scraping ${positionIds.length} positions via ${state.selectedSource}`, 'success');
-        addLog(`Started ${state.selectedSource} scraping for ${positionIds.length} positions with suffix '${searchSuffix}'`, 'info');
+        showToast(`Started scraping ${result.positions_count} positions via ${state.selectedSource}`, 'success');
+        addLog(`Started ${state.selectedSource} scraping for ${result.positions_count} positions (top_up=${topUp})`, 'info');
         startProgressStream();
     } catch (err) {
         showToast('Failed to start scraping', 'error');
@@ -365,11 +439,34 @@ function updateProgressUI(progress) {
 
 function updateScrapeUI() {
     const posInfo = document.getElementById('scrape-pos-info');
-    if (posInfo) {
-        const count = state.selectedPositions.size || state.positions.length;
-        posInfo.textContent = state.selectedPositions.size > 0
-            ? `${count} positions selected`
-            : `All ${count} positions (none selected)`;
+    if (!posInfo) return;
+
+    const targetCount = parseInt(document.getElementById('scrape-count')?.value || '40');
+    const selectedList = state.selectedPositions.size > 0
+        ? state.positions.filter(p => state.selectedPositions.has(p.id))
+        : state.positions;
+
+    const incompleteList = selectedList.filter(p => (p.images_downloaded || 0) < targetCount);
+    const totalMissing = incompleteList.reduce((sum, p) => sum + Math.max(0, targetCount - (p.images_downloaded || 0)), 0);
+
+    if (state.selectedPositions.size > 0) {
+        if (incompleteList.length > 0) {
+            posInfo.innerHTML = `
+                <span style="color:#f59e0b;font-weight:600;">
+                    ${state.selectedPositions.size} positions selected — ${incompleteList.length} incomplete (${totalMissing} missing images total)
+                </span>
+            `;
+        } else {
+            posInfo.innerHTML = `
+                <span style="color:var(--accent-cyan);font-weight:500;">
+                    ${state.selectedPositions.size} positions selected (all complete with ${targetCount}+ images)
+                </span>
+            `;
+        }
+    } else {
+        posInfo.innerHTML = `
+            <span>All ${state.positions.length} positions (${incompleteList.length} incomplete, ${totalMissing} missing images total)</span>
+        `;
     }
 }
 

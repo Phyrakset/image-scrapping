@@ -31,7 +31,7 @@ class AIImageGenerator(BaseScraper):
     def source_name(self) -> str:
         return f"AI ({self.provider.capitalize()})"
 
-    def scrape(self, query: str, output_dir: str, num_images: int) -> list[str]:
+    def scrape(self, query: str, output_dir: str, num_images: int, start_offset: int = 0) -> list[str]:
         """
         Generate images for the given position query using AI.
         """
@@ -45,13 +45,13 @@ class AIImageGenerator(BaseScraper):
             raise RuntimeError(msg)
 
         if self.provider == "gemini":
-            return self._generate_gemini(query, output_dir, num_images)
+            return self._generate_gemini(query, output_dir, num_images, start_offset=start_offset)
         elif self.provider == "openai":
-            return self._generate_openai(query, output_dir, num_images)
+            return self._generate_openai(query, output_dir, num_images, start_offset=start_offset)
         else:
             raise ValueError(f"Unknown AI provider: {self.provider}")
 
-    def _generate_gemini(self, query: str, output_dir: str, num_images: int) -> list[str]:
+    def _generate_gemini(self, query: str, output_dir: str, num_images: int, start_offset: int = 0) -> list[str]:
         """Generate images using Google Gemini."""
         downloaded_files = []
 
@@ -59,7 +59,7 @@ class AIImageGenerator(BaseScraper):
             from google import genai
             from google.genai import types
 
-            logger.info(f"[AI/Gemini] Generating images for '{query}' — target: {num_images}")
+            logger.info(f"[AI/Gemini] Generating images for '{query}' — target: {num_images} (offset {start_offset})")
             self._progress["message"] = f"[AI/Gemini] Generating images for: {query}"
 
             client = genai.Client(api_key=self.api_key)
@@ -68,6 +68,7 @@ class AIImageGenerator(BaseScraper):
                 if self.is_stopped():
                     break
 
+                file_idx = start_offset + idx + 1
                 self._progress["current_image"] = idx + 1
                 self._progress["message"] = f"[AI/Gemini] Generating {idx + 1}/{num_images}: {query}"
 
@@ -87,7 +88,7 @@ class AIImageGenerator(BaseScraper):
 
                     if response.generated_images:
                         for img_data in response.generated_images:
-                            file_name = f"{idx + 1:03d}.png"
+                            file_name = f"{file_idx:03d}.png"
                             file_path = os.path.join(output_dir, file_name)
 
                             image = img_data.image
@@ -99,7 +100,7 @@ class AIImageGenerator(BaseScraper):
                                     f.write(image.data)
 
                             downloaded_files.append(file_path)
-                            logger.info(f"[AI/Gemini] Generated image {idx + 1}: {file_path}")
+                            logger.info(f"[AI/Gemini] Generated image {file_idx}: {file_path}")
                     else:
                         logger.warning(f"[AI/Gemini] No image generated for prompt {idx + 1}")
 
@@ -118,14 +119,14 @@ class AIImageGenerator(BaseScraper):
         logger.info(f"[AI/Gemini] Generated {len(downloaded_files)} images for '{query}'")
         return downloaded_files
 
-    def _generate_openai(self, query: str, output_dir: str, num_images: int) -> list[str]:
+    def _generate_openai(self, query: str, output_dir: str, num_images: int, start_offset: int = 0) -> list[str]:
         """Generate images using OpenAI DALL-E."""
         downloaded_files = []
 
         try:
             from openai import OpenAI
 
-            logger.info(f"[AI/OpenAI] Generating images for '{query}' — target: {num_images}")
+            logger.info(f"[AI/OpenAI] Generating images for '{query}' — target: {num_images} (offset {start_offset})")
             self._progress["message"] = f"[AI/OpenAI] Generating images for: {query}"
 
             client = OpenAI(api_key=self.api_key)
@@ -134,6 +135,7 @@ class AIImageGenerator(BaseScraper):
                 if self.is_stopped():
                     break
 
+                file_idx = start_offset + idx + 1
                 self._progress["current_image"] = idx + 1
                 self._progress["message"] = f"[AI/OpenAI] Generating {idx + 1}/{num_images}: {query}"
 
@@ -153,14 +155,14 @@ class AIImageGenerator(BaseScraper):
                         img_b64 = response.data[0].b64_json
                         img_bytes = base64.b64decode(img_b64)
 
-                        file_name = f"{idx + 1:03d}.png"
+                        file_name = f"{file_idx:03d}.png"
                         file_path = os.path.join(output_dir, file_name)
 
                         with open(file_path, "wb") as f:
                             f.write(img_bytes)
 
                         downloaded_files.append(file_path)
-                        logger.info(f"[AI/OpenAI] Generated image {idx + 1}: {file_path}")
+                        logger.info(f"[AI/OpenAI] Generated image {file_idx}: {file_path}")
 
                 except Exception as e:
                     logger.error(f"[AI/OpenAI] Error generating image {idx + 1}: {e}")

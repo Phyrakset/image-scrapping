@@ -1,11 +1,13 @@
 """
-Google Image Search scraper using Playwright browser automation.
+Google Image Search scraper using Playwright and fallback web search.
 """
 import os
+import re
 import time
+import base64
 import logging
-import hashlib
 import urllib.parse
+from typing import List
 
 from scrapers.base_scraper import BaseScraper
 
@@ -13,9 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 class GoogleImageScraper(BaseScraper):
-    """Scrape and download images from Google Image Search using Playwright."""
+    """Scrape and download images from Google & Web Image Search."""
 
-    def __init__(self, delay: int = 2, headless: bool = True):
+    def __init__(self, delay: float = 2.0, headless: bool = True):
         super().__init__()
         self.delay = delay
         self.headless = headless
@@ -24,144 +26,94 @@ class GoogleImageScraper(BaseScraper):
     def source_name(self) -> str:
         return "Google Images"
 
-    def scrape(self, query: str, output_dir: str, num_images: int) -> list[str]:
+    def scrape(self, query: str, output_dir: str, num_images: int, start_offset: int = 0) -> List[str]:
         """
-        Search Google Images for the query and download results.
+        Search Google/Web Images for the query and download results into output_dir.
         """
         if self.is_stopped():
             return []
 
         downloaded_files = []
+        image_urls = []
 
         try:
-            from playwright.sync_api import sync_playwright
+            logger.info(f"[Google] Searching for '{query}' — target: {num_images} images (offset {start_offset})")
+            self._progress["message"] = f"[Google] Searching for: {query}"
+            self._progress["total_images"] = num_images
+            self._progress["current_image"] = 0
 
-            logger.info(f"[Google] Searching for '{query}' — target: {num_images} images")
-            self._progress["message"] = f"[Google] Launching browser for: {query}"
+            # Step 1: Try Playwright extraction on Google Images
+            try:
+                from playwright.sync_api import sync_playwright
+                with sync_playwright() as p:
+                    browser = p.chromium.launch(
+                        headless=self.headless,
+                        args=["--disable-blink-features=AutomationControlled", "--no-sandbox"]
+                    )
+                    context = browser.new_context(
+                        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                        viewport={"width": 1920, "height": 1080},
+                    )
+                    page = context.new_page()
+                    page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
-            with sync_playwright() as p:
-                browser = p.chromium.launch(headless=self.headless)
-                context = browser.new_context(
-                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                    viewport={"width": 1920, "height": 1080},
-                )
-                page = context.new_page()
-
-                # Navigate to Google Images
-                encoded_query = urllib.parse.quote(query)
-                search_url = f"https://www.google.com/search?q={encoded_query}&tbm=isch&hl=en"
-                page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
-                time.sleep(2)
-
-                # Accept cookies if dialog appears
-                try:
-                    accept_btn = page.query_selector('button:has-text("Accept all")')
-                    if accept_btn:
-                        accept_btn.click()
-                        time.sleep(1)
-                except Exception:
-                    pass
-
-                image_urls = set()
-                scroll_count = 0
-                max_scrolls = max(num_images // 10, 10)
-
-                self._progress["message"] = f"[Google] Collecting image URLs for: {query}"
-
-                # Scroll to load more images
-                while len(image_urls) < num_images and scroll_count < max_scrolls:
-                    if self.is_stopped():
-                        break
-
-                    # Collect thumbnail image elements
-                    thumbnails = page.query_selector_all('img[data-src], img.YQ4gaf, img.Q4LuWd, img[jsname]')
-
-                    for thumb in thumbnails:
-                        if len(image_urls) >= num_images:
-                            break
-
-                        try:
-                            # Try clicking the thumbnail to get full-size URL
-                            src = thumb.get_attribute("data-src") or thumb.get_attribute("src")
-                            if src and src.startswith("http") and "gstatic" not in src and "google" not in src:
-                                image_urls.add(src)
-                        except Exception:
-                            continue
-
-                    # Try to get higher-resolution images by clicking thumbnails
-                    if len(image_urls) < num_images:
-                        try:
-                            # Find clickable thumbnail containers
-                            thumb_containers = page.query_selector_all('div[jscontroller] a[jsname]')
-                            for container in thumb_containers:
-                                if len(image_urls) >= num_images or self.is_stopped():
-                                    break
-                                try:
-                                    container.click(timeout=2000)
-                                    time.sleep(0.5)
-
-                                    # Look for the large image in the side panel
-                                    large_imgs = page.query_selector_all('img[jsname="kn3ccd"], img.sFlh5c, img.iPVvYb')
-                                    for img in large_imgs:
-                                        src = img.get_attribute("src")
-                                        if src and src.startswith("http") and "gstatic" not in src and "encrypted" not in src:
-                                            image_urls.add(src)
-                                            break
-                                except Exception:
-                                    continue
-                        except Exception:
-                            pass
-
-                    # Scroll down to load more
-                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    encoded_query = urllib.parse.quote(query)
+                    search_url = f"https://www.google.com/search?q={encoded_query}&tbm=isch&hl=en"
+                    page.goto(search_url, wait_until="domcontentloaded", timeout=20000)
                     time.sleep(1.5)
 
-                    # Check for "Show more results" button
-                    try:
-                        show_more = page.query_selector('input[value="Show more results"]')
-                        if show_more:
-                            show_more.click()
-                            time.sleep(2)
-                    except Exception:
-                        pass
+                    if "sorry/index" not in page.url:
+                        # Extract img src attributes
+                        imgs = page.query_selector_all('img')
+                        for img in imgs:
+                            src = img.get_attribute("src") or img.get_attribute("data-src") or img.get_attribute("data-iurl")
+                            if src and (src.startswith("http") or src.startswith("data:image/")):
+                                if src not in image_urls:
+                                    image_urls.append(src)
 
-                    scroll_count += 1
-                    self._progress["message"] = f"[Google] Found {len(image_urls)} URLs (scroll {scroll_count}): {query}"
+                        # Regex extract image URLs from scripts
+                        html_content = page.content()
+                        found_urls = re.findall(r'\["(https?://[^"]+\.(?:jpg|jpeg|png|webp))",\s*\d+,\s*\d+\]', html_content)
+                        for u in found_urls:
+                            if "gstatic" not in u and "google" not in u and u not in image_urls:
+                                image_urls.append(u)
 
-                browser.close()
+                    browser.close()
+            except Exception as e:
+                logger.warning(f"[Google] Playwright search notice: {e}")
 
-            # Download collected images
+            # Step 2: Fallback to Web Image Search engine if Playwright produced insufficient URLs
+            if len(image_urls) < num_images:
+                logger.info(f"[Google] Using web image engine for '{query}'...")
+                fallback_urls = self._search_web_images(query, num_images * 4)
+                for u in fallback_urls:
+                    if u not in image_urls:
+                        image_urls.append(u)
+
             logger.info(f"[Google] Collected {len(image_urls)} URLs for '{query}', downloading...")
-            self._progress["message"] = f"[Google] Downloading {len(image_urls)} images for: {query}"
+            self._progress["message"] = f"[Google] Downloading {min(len(image_urls), num_images)} images for: {query}"
 
-            for idx, url in enumerate(list(image_urls)[:num_images]):
-                if self.is_stopped():
+            # Step 3: Download collected images
+            os.makedirs(output_dir, exist_ok=True)
+            for idx, url in enumerate(image_urls):
+                if len(downloaded_files) >= num_images or self.is_stopped():
                     break
 
-                self._progress["current_image"] = idx + 1
-                self._progress["message"] = f"[Google] Downloading {idx + 1}/{min(len(image_urls), num_images)}: {query}"
+                self._progress["current_image"] = len(downloaded_files) + 1
+                self._progress["message"] = f"[Google] Downloading {len(downloaded_files) + 1}/{num_images}: {query}"
 
-                try:
-                    file_path = self._download_image(url, output_dir, idx + 1)
-                    if file_path:
-                        downloaded_files.append(file_path)
-                except Exception as e:
-                    logger.error(f"[Google] Download failed for image {idx + 1}: {e}")
-                    continue
+                file_idx = start_offset + len(downloaded_files) + 1
+                file_path = self._download_image(url, output_dir, file_idx)
+                if file_path:
+                    downloaded_files.append(file_path)
 
                 if self.delay > 0:
-                    time.sleep(self.delay * 0.3)
-
-        except ImportError:
-            logger.error("[Google] Playwright not installed. Run: pip install playwright && playwright install chromium")
-            self._progress["message"] = "Error: Playwright not installed"
-            raise RuntimeError("Playwright not installed. Run: pip install playwright && playwright install chromium")
+                    time.sleep(self.delay * 0.2)
 
         except Exception as e:
             logger.error(f"[Google] Error scraping '{query}': {e}")
             self._progress["message"] = f"[Google] Error: {str(e)}"
 
-        # Delay between position searches
         if self.delay > 0:
             time.sleep(self.delay)
 
@@ -169,19 +121,72 @@ class GoogleImageScraper(BaseScraper):
         return downloaded_files
 
     @staticmethod
+    def _search_web_images(query: str, max_urls: int = 30) -> List[str]:
+        """Fetch image URLs via web image search engine."""
+        import requests
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+        encoded_query = urllib.parse.quote(query)
+        url = f"https://www.bing.com/images/search?q={encoded_query}&form=HDRSC2&first=1"
+        urls = []
+        try:
+            r = requests.get(url, headers=headers, timeout=12)
+            if r.status_code == 200:
+                murls = re.findall(r'murl&quot;:&quot;(https?://[^&]+)&quot;', r.text)
+                seen = set()
+                for u in murls:
+                    u = u.replace("\\/", "/")
+                    if u not in seen:
+                        seen.add(u)
+                        urls.append(u)
+                    if len(urls) >= max_urls:
+                        break
+        except Exception as e:
+            logger.error(f"[Google] Fallback search error: {e}")
+        return urls
+
+    @staticmethod
     def _download_image(url: str, output_dir: str, index: int) -> str | None:
-        """Download a single image from URL."""
+        """Download a single image from HTTP URL or base64 data URI."""
         import requests
 
         try:
+            # Handle Base64 Data URI
+            if url.startswith("data:image/"):
+                header, data = url.split(",", 1)
+                mime_type = header.split(";")[0].replace("data:", "")
+                ext_map = {
+                    "image/jpeg": ".jpg",
+                    "image/png": ".png",
+                    "image/gif": ".gif",
+                    "image/webp": ".webp",
+                }
+                ext = ext_map.get(mime_type, ".jpg")
+                file_name = f"{index:03d}{ext}"
+                file_path = os.path.join(output_dir, file_name)
+
+                img_data = base64.b64decode(data)
+                with open(file_path, "wb") as f:
+                    f.write(img_data)
+
+                if os.path.getsize(file_path) > 500:
+                    return file_path
+                else:
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                    return None
+
+            # Handle HTTP/HTTPS URL
             headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
                 "Referer": "https://www.google.com/",
             }
-            response = requests.get(url, headers=headers, timeout=30, stream=True)
+            response = requests.get(url, headers=headers, timeout=20, stream=True)
             response.raise_for_status()
 
-            # Determine file extension
             content_type = response.headers.get("content-type", "image/jpeg")
             ext_map = {
                 "image/jpeg": ".jpg",
@@ -190,7 +195,7 @@ class GoogleImageScraper(BaseScraper):
                 "image/webp": ".webp",
                 "image/svg+xml": ".svg",
             }
-            ext = ext_map.get(content_type.split(";")[0].strip(), ".jpg")
+            ext = ext_map.get(content_type.split(";")[0].strip().lower(), ".jpg")
 
             file_name = f"{index:03d}{ext}"
             file_path = os.path.join(output_dir, file_name)
@@ -199,13 +204,14 @@ class GoogleImageScraper(BaseScraper):
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
 
-            # Validate it's a real image (at least 1KB)
             if os.path.getsize(file_path) < 1024:
-                os.remove(file_path)
+                if os.path.exists(file_path):
+                    os.remove(file_path)
                 return None
 
             return file_path
 
         except Exception as e:
-            logger.error(f"[Google] Download failed for {url}: {e}")
+            logger.error(f"[Google] Download failed for {url[:60]}: {e}")
             return None
+

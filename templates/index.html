@@ -151,16 +151,24 @@
                     <h3><span class="icon">📋</span> All Positions</h3>
                 </div>
                 <div class="card-body">
-                    <!-- Search -->
-                    <div class="search-bar">
-                        <span class="search-icon">🔍</span>
-                        <input type="text" id="position-search" placeholder="Search positions..."
-                               oninput="renderPositions(this.value)" />
+                    <!-- Search & Filter -->
+                    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+                        <div class="search-bar" style="flex:1;margin-bottom:0;">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" id="position-search" placeholder="Search positions..."
+                                   oninput="renderPositions(this.value)" />
+                        </div>
+                        <div class="filter-tabs" style="display:flex;gap:6px;">
+                            <button class="btn btn-sm btn-secondary active" id="tab-filter-all" onclick="setPosFilter('all')">All (<span id="cnt-filter-all">0</span>)</button>
+                            <button class="btn btn-sm btn-secondary" id="tab-filter-complete" onclick="setPosFilter('complete')">Complete (<span id="cnt-filter-complete">0</span>)</button>
+                            <button class="btn btn-sm btn-warning" id="tab-filter-incomplete" onclick="setPosFilter('incomplete')">⚠️ Incomplete (<span id="cnt-filter-incomplete">0</span>)</button>
+                        </div>
                     </div>
 
                     <!-- Select bar -->
                     <div class="select-bar">
                         <button class="btn btn-sm btn-secondary" onclick="selectAllPositions()">Select All</button>
+                        <button class="btn btn-sm btn-warning" onclick="selectIncompletePositions()">⚡ Select Incomplete (&lt; 40)</button>
                         <button class="btn btn-sm btn-secondary" onclick="deselectAllPositions()">Deselect All</button>
                         <span class="select-count" id="select-count">0 selected</span>
                     </div>
@@ -214,8 +222,8 @@
                     </div>
                     <div class="card-body">
                         <div class="form-group">
-                            <label for="scrape-count">Images per Position</label>
-                            <input type="number" id="scrape-count" value="30" min="1" max="200" />
+                            <label for="scrape-count">Target Images per Position</label>
+                            <input type="number" id="scrape-count" value="40" min="1" max="200" onchange="onScrapeCountChange()" />
                         </div>
                         <div class="form-group">
                             <label for="scrape-suffix">Search Query Suffix / Modifier</label>
@@ -226,14 +234,29 @@
                         </div>
                         <div class="form-group">
                             <label>Positions to Scrape</label>
-
                             <div id="scrape-pos-info" style="color:var(--accent-cyan);font-weight:500;font-size:0.9rem;">
                                 All positions (none selected)
                             </div>
-                            <small style="color:var(--text-muted);display:block;margin-top:4px;">
-                                Go to Positions page to select specific ones, or all will be processed.
+                            <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                                <button class="btn btn-sm btn-warning" onclick="selectIncompleteForScrape()">
+                                    ⚡ Target Incomplete Positions Only (&lt; <span class="lbl-target-count">40</span>)
+                                </button>
+                                <button class="btn btn-sm btn-secondary" onclick="navigateTo('positions')">
+                                    📋 Custom Selection
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="background:var(--bg-glass, rgba(255,255,255,0.05));padding:12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);">
+                            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:600;">
+                                <input type="checkbox" id="scrape-top-up" checked style="width:18px;height:18px;accent-color:var(--accent-cyan);" />
+                                <span>Fill Missing Images Only (Top-Up Mode)</span>
+                            </label>
+                            <small style="color:var(--text-muted);display:block;margin-top:6px;line-height:1.4;">
+                                Only downloads the remaining count needed to reach <span class="lbl-target-count">40</span> (e.g., if position has 38 images, downloads 2 more). Preserves existing images cleanly.
                             </small>
                         </div>
+
                         <div style="display:flex;gap:12px;margin-top:20px;">
                             <button id="btn-start" class="btn btn-primary" onclick="startScrape()">
                                 ▶️ Start Scraping

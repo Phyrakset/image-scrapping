@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TverKar Image Scrapping — Admin Dashboard</title>
+    <meta name="description" content="Web scraping tool to download images from Pinterest, Google, and AI generators for job positions." />
+    <link rel="stylesheet" href="/static/css/style.css" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖼️</text></svg>" />
+</head>
+<body>
+
+<!-- Toast Notifications -->
+<div id="toast-container" class="toast-container"></div>
+
+<!-- Lightbox -->
+<div id="lightbox" class="lightbox">
+    <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+    <img id="lightbox-img" src="" alt="Preview" />
+</div>
+
+<div class="app-layout">
+    <!-- ==================== SIDEBAR ==================== -->
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <div class="logo-icon">🖼️</div>
+            <div>
+                <h1>TverKar</h1>
+                <div class="version">Image Scrapping v1.0</div>
+            </div>
+        </div>
+
+        <nav class="sidebar-nav">
+            <div class="nav-item active" data-page="dashboard">
+                <span class="icon">📊</span>
+                <span>Dashboard</span>
+            </div>
+            <div class="nav-item" data-page="positions">
+                <span class="icon">📋</span>
+                <span>Positions</span>
+                <span class="badge" id="nav-pos-count">0</span>
+            </div>
+            <div class="nav-item" data-page="scrape">
+                <span class="icon">⚡</span>
+                <span>Scrape Images</span>
+            </div>
+            <div class="nav-item" data-page="gallery">
+                <span class="icon">🖼️</span>
+                <span>Gallery</span>
+            </div>
+            <div class="nav-item" data-page="settings">
+                <span class="icon">⚙️</span>
+                <span>Settings</span>
+            </div>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div id="global-status" class="status-badge idle" style="margin-bottom: 8px;">
+                <span class="status-dot"></span>
+                <span class="status-text">IDLE</span>
+            </div>
+            <div>© 2026 TverKar</div>
+        </div>
+    </aside>
+
+    <!-- ==================== MAIN CONTENT ==================== -->
+    <main class="main-content">
+
+        <!-- ========== DASHBOARD ========== -->
+        <section id="page-dashboard" class="page-section active">
+            <div class="page-header">
+                <h2><span class="icon">📊</span> Dashboard</h2>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">📋</div>
+                    <div class="stat-value" id="stat-positions">0</div>
+                    <div class="stat-label">Total Positions</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">📷</div>
+                    <div class="stat-value" id="stat-images">0</div>
+                    <div class="stat-label">Images Downloaded</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">📁</div>
+                    <div class="stat-value" id="stat-folders">0</div>
+                    <div class="stat-label">Positions with Images</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">⚡</div>
+                    <div class="stat-value" id="stat-status" style="font-size:1.2rem;">IDLE</div>
+                    <div class="stat-label">Scraper Status</div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card" style="margin-bottom:24px;">
+                <div class="card-header">
+                    <h3><span class="icon">🚀</span> Quick Actions</h3>
+                </div>
+                <div class="card-body" style="display:flex;gap:12px;flex-wrap:wrap;">
+                    <button class="btn btn-primary" onclick="navigateTo('scrape')">⚡ Start Scraping</button>
+                    <button class="btn btn-secondary" onclick="navigateTo('positions')">📋 Manage Positions</button>
+                    <button class="btn btn-secondary" onclick="navigateTo('gallery')">🖼️ View Gallery</button>
+                    <button class="btn btn-secondary" onclick="navigateTo('settings')">⚙️ Settings</button>
+                </div>
+            </div>
+
+            <!-- Activity Log -->
+            <div class="card">
+                <div class="card-header">
+                    <h3><span class="icon">📜</span> Activity Log</h3>
+                </div>
+                <div class="card-body">
+                    <div id="log-panel" class="log-panel">
+                        <div class="log-line">
+                            <span class="log-time">[--:--:--]</span>
+                            <span class="log-text info">Waiting for activity...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========== POSITIONS ========== -->
+        <section id="page-positions" class="page-section">
+            <div class="page-header">
+                <h2><span class="icon">📋</span> Position Manager</h2>
+                <div class="header-actions">
+                    <button class="btn btn-primary btn-sm" onclick="navigateTo('scrape')">⚡ Scrape Selected</button>
+                </div>
+            </div>
+
+            <!-- Add Position -->
+            <div class="card" style="margin-bottom:24px;">
+                <div class="card-body" style="display:flex;gap:12px;align-items:flex-end;">
+                    <div class="form-group" style="flex:1;margin-bottom:0;">
+                        <label for="new-position-input">Add New Position</label>
+                        <input type="text" id="new-position-input" placeholder="Enter position title..."
+                               onkeydown="if(event.key==='Enter') addPosition()" />
+                    </div>
+                    <button class="btn btn-primary" onclick="addPosition()">+ Add</button>
+                </div>
+            </div>
+
+            <!-- Position List -->
+            <div class="card">
+                <div class="card-header">
+                    <h3><span class="icon">📋</span> All Positions</h3>
+                </div>
+                <div class="card-body">
+                    <!-- Search -->
+                    <div class="search-bar">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="position-search" placeholder="Search positions..."
+                               oninput="renderPositions(this.value)" />
+                    </div>
+
+                    <!-- Select bar -->
+                    <div class="select-bar">
+                        <button class="btn btn-sm btn-secondary" onclick="selectAllPositions()">Select All</button>
+                        <button class="btn btn-sm btn-secondary" onclick="deselectAllPositions()">Deselect All</button>
+                        <span class="select-count" id="select-count">0 selected</span>
+                    </div>
+
+                    <!-- List -->
+                    <div id="position-list" class="position-list">
+                        <div class="empty-state">
+                            <div class="empty-icon">⏳</div>
+                            <p>Loading positions...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========== SCRAPE ========== -->
+        <section id="page-scrape" class="page-section">
+            <div class="page-header">
+                <h2><span class="icon">⚡</span> Scrape Images</h2>
+            </div>
+
+            <!-- Source Selection -->
+            <div class="source-tabs">
+                <button class="source-tab active" data-source="pinterest" onclick="selectSource('pinterest')">
+                    <div class="source-icon">📌</div>
+                    <div>Pinterest</div>
+                    <div class="source-desc">Search & download from Pinterest</div>
+                </button>
+                <button class="source-tab" data-source="google" onclick="selectSource('google')">
+                    <div class="source-icon">🔍</div>
+                    <div>Google Images</div>
+                    <div class="source-desc">Search via Google Image Search</div>
+                </button>
+                <button class="source-tab" data-source="ai_gemini" onclick="selectSource('ai_gemini')">
+                    <div class="source-icon">✨</div>
+                    <div>AI — Gemini</div>
+                    <div class="source-desc">Generate with Google Imagen</div>
+                </button>
+                <button class="source-tab" data-source="ai_openai" onclick="selectSource('ai_openai')">
+                    <div class="source-icon">🤖</div>
+                    <div>AI — OpenAI</div>
+                    <div class="source-desc">Generate with DALL-E 3</div>
+                </button>
+            </div>
+
+            <!-- Scrape Config -->
+            <div class="two-col">
+                <div class="card">
+                    <div class="card-header">
+                        <h3><span class="icon">⚙️</span> Configuration</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label for="scrape-count">Images per Position</label>
+                            <input type="number" id="scrape-count" value="30" min="1" max="200" />
+                        </div>
+                        <div class="form-group">
+                            <label for="scrape-suffix">Search Query Suffix / Modifier</label>
+                            <input type="text" id="scrape-suffix" value="Single Person Asian" placeholder="e.g. Single Person Asian" />
+                            <small style="color:var(--text-muted);display:block;margin-top:4px;">
+                                Appended to each position name during search (e.g. "Production-line Worker Single Person Asian").
+                            </small>
+                        </div>
+                        <div class="form-group">
+                            <label>Positions to Scrape</label>
+
+                            <div id="scrape-pos-info" style="color:var(--accent-cyan);font-weight:500;font-size:0.9rem;">
+                                All positions (none selected)
+                            </div>
+                            <small style="color:var(--text-muted);display:block;margin-top:4px;">
+                                Go to Positions page to select specific ones, or all will be processed.
+                            </small>
+                        </div>
+                        <div style="display:flex;gap:12px;margin-top:20px;">
+                            <button id="btn-start" class="btn btn-primary" onclick="startScrape()">
+                                ▶️ Start Scraping
+                            </button>
+                            <button id="btn-stop" class="btn btn-danger" onclick="stopScrape()" disabled>
+                                ⏹️ Stop
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3><span class="icon">📈</span> Progress</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="progress-section">
+                            <div class="empty-state" style="padding:30px;">
+                                <div class="empty-icon">📈</div>
+                                <p>Start a scraping job to see progress here</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Log -->
+            <div class="card" style="margin-top:24px;">
+                <div class="card-header">
+                    <h3><span class="icon">📜</span> Scraping Log</h3>
+                </div>
+                <div class="card-body">
+                    <div id="log-panel" class="log-panel">
+                        <div class="log-line">
+                            <span class="log-time">[--:--:--]</span>
+                            <span class="log-text info">Ready to scrape...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========== GALLERY ========== -->
+        <section id="page-gallery" class="page-section">
+            <div class="page-header">
+                <h2 id="gallery-header"><span class="icon">🖼️</span> Image Gallery</h2>
+            </div>
+
+            <div id="gallery-content">
+                <div class="empty-state">
+                    <div class="empty-icon">⏳</div>
+                    <p>Loading gallery...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========== SETTINGS ========== -->
+        <section id="page-settings" class="page-section">
+            <div class="page-header">
+                <h2><span class="icon">⚙️</span> Settings</h2>
+                <button class="btn btn-primary" onclick="saveSettings()">💾 Save Settings</button>
+            </div>
+
+            <div class="two-col">
+                <div class="card">
+                    <div class="card-header">
+                        <h3><span class="icon">🔑</span> API Keys</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="settings-section">
+                            <h4>✨ Google Gemini</h4>
+                            <div class="form-group">
+                                <label for="setting-gemini-key">Gemini API Key</label>
+                                <input type="password" id="setting-gemini-key" placeholder="Enter your Gemini API key..." />
+                            </div>
+                        </div>
+                        <div class="settings-section">
+                            <h4>🤖 OpenAI</h4>
+                            <div class="form-group">
+                                <label for="setting-openai-key">OpenAI API Key</label>
+                                <input type="password" id="setting-openai-key" placeholder="Enter your OpenAI API key..." />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3><span class="icon">🛠️</span> Scraping Options</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label for="setting-images-count">Default Images per Position</label>
+                            <input type="number" id="setting-images-count" value="30" min="1" max="500" />
+                        </div>
+                        <div class="form-group">
+                            <label for="setting-suffix">Default Search Query Suffix</label>
+                            <input type="text" id="setting-suffix" value="Single Person Asian" placeholder="e.g. Single Person Asian" />
+                        </div>
+                        <div class="form-group">
+                            <label for="setting-delay">Delay Between Downloads (seconds)</label>
+                            <input type="number" id="setting-delay" value="2" min="0" max="30" />
+                        </div>
+
+                        <div class="settings-section" style="margin-top:24px;">
+                            <h4>📁 Download Directory</h4>
+                            <p style="color:var(--text-secondary);font-size:0.9rem;">
+                                Images are saved to:<br/>
+                                <code style="color:var(--accent-cyan);background:var(--bg-glass);padding:4px 10px;border-radius:4px;display:inline-block;margin-top:6px;">
+                                    d:\WorkingNa\TverKar-ImageScrapping\downloads\&lt;Position Name&gt;\
+                                </code>
+                            </p>
+                            <p style="color:var(--text-muted);font-size:0.8rem;margin-top:8px;">
+                                Each position gets its own folder. Images are numbered sequentially (001.jpg, 002.jpg, ...).
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+</div>
+
+<script src="/static/js/app.js"></script>
+<script>
+    // Update position count badge after load
+    (async () => {
+        try {
+            const data = await API.getPositions();
+            document.getElementById('nav-pos-count').textContent = data.total || 0;
+        } catch(e) {}
+    })();
+</script>
+</body>
+</html>

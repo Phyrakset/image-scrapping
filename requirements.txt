@@ -1,0 +1,9 @@
+flask>=3.0
+flask-cors
+pinterest-dl
+playwright
+requests
+Pillow
+google-generativeai
+openai
+python-dotenv

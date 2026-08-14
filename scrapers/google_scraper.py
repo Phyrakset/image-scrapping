@@ -26,9 +26,18 @@ class GoogleImageScraper(BaseScraper):
     def source_name(self) -> str:
         return "Google Images"
 
-    def scrape(self, query: str, output_dir: str, num_images: int, start_offset: int = 0) -> List[str]:
+    def scrape(
+        self,
+        query: str,
+        output_dir: str,
+        num_images: int,
+        start_offset: int = 0,
+        only_ai_person: bool = False,
+        detector=None,
+    ) -> List[str]:
         """
         Search Google/Web Images for the query and download results into output_dir.
+        Optionally filters to only keep AI-generated person images and reject real person photos.
         """
         if self.is_stopped():
             return []
@@ -36,9 +45,19 @@ class GoogleImageScraper(BaseScraper):
         downloaded_files = []
         image_urls = []
 
+        # Enhance query if only_ai_person is enabled
+        effective_query = query
+        if only_ai_person:
+            ai_keywords = ["AI generated", "AI art", "Midjourney", "AI portrait"]
+            if not any(kw.lower() in query.lower() for kw in ai_keywords):
+                effective_query = f"{query} AI generated person Midjourney"
+
+        # Multiplier for candidates when filtering is active
+        url_fetch_target = num_images * 6 if only_ai_person else num_images * 2
+
         try:
-            logger.info(f"[Google] Searching for '{query}' — target: {num_images} images (offset {start_offset})")
-            self._progress["message"] = f"[Google] Searching for: {query}"
+            logger.info(f"[Google] Searching for '{effective_query}' — target: {num_images} images (offset {start_offset}, only_ai={only_ai_person})")
+            self._progress["message"] = f"[Google] Searching for: {effective_query}"
             self._progress["total_images"] = num_images
             self._progress["current_image"] = 0
 
@@ -57,7 +76,7 @@ class GoogleImageScraper(BaseScraper):
                     page = context.new_page()
                     page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
-                    encoded_query = urllib.parse.quote(query)
+                    encoded_query = urllib.parse.quote(effective_query)
                     search_url = f"https://www.google.com/search?q={encoded_query}&tbm=isch&hl=en"
                     page.goto(search_url, wait_until="domcontentloaded", timeout=20000)
                     time.sleep(1.5)
@@ -83,29 +102,56 @@ class GoogleImageScraper(BaseScraper):
                 logger.warning(f"[Google] Playwright search notice: {e}")
 
             # Step 2: Fallback to Web Image Search engine if Playwright produced insufficient URLs
-            if len(image_urls) < num_images:
-                logger.info(f"[Google] Using web image engine for '{query}'...")
-                fallback_urls = self._search_web_images(query, num_images * 4)
+            if len(image_urls) < url_fetch_target:
+                logger.info(f"[Google] Using web image engine for '{effective_query}'...")
+                fallback_urls = self._search_web_images(effective_query, url_fetch_target)
                 for u in fallback_urls:
                     if u not in image_urls:
                         image_urls.append(u)
 
-            logger.info(f"[Google] Collected {len(image_urls)} URLs for '{query}', downloading...")
-            self._progress["message"] = f"[Google] Downloading {min(len(image_urls), num_images)} images for: {query}"
+            logger.info(f"[Google] Collected {len(image_urls)} URLs for '{effective_query}', processing...")
+            self._progress["message"] = f"[Google] Downloading candidates for: {effective_query}"
 
-            # Step 3: Download collected images
+            # Step 3: Download & classify collected images
             os.makedirs(output_dir, exist_ok=True)
             for idx, url in enumerate(image_urls):
                 if len(downloaded_files) >= num_images or self.is_stopped():
                     break
 
-                self._progress["current_image"] = len(downloaded_files) + 1
-                self._progress["message"] = f"[Google] Downloading {len(downloaded_files) + 1}/{num_images}: {query}"
+                target_file_idx = start_offset + len(downloaded_files) + 1
+                # Download to a temporary index first
+                temp_idx = 90000 + idx
+                temp_path = self._download_image(url, output_dir, temp_idx)
+                if not temp_path or not os.path.exists(temp_path):
+                    continue
 
-                file_idx = start_offset + len(downloaded_files) + 1
-                file_path = self._download_image(url, output_dir, file_idx)
-                if file_path:
-                    downloaded_files.append(file_path)
+                # Run AI Person Filter if enabled
+                if only_ai_person and detector:
+                    self._progress["message"] = f"[Google AI Filter] Inspecting image {len(downloaded_files) + 1}/{num_images}..."
+                    is_ai, reason = detector.is_ai_person(temp_path)
+                    if not is_ai:
+                        logger.info(f"[Google AI Filter] {reason}")
+                        try:
+                            os.remove(temp_path)
+                        except Exception:
+                            pass
+                        self._progress["filtered"] = self._progress.get("filtered", 0) + 1
+                        self._progress["message"] = f"[AI Filter] Excluded real person ({self._progress['filtered']} rejected, {len(downloaded_files)}/{num_images} kept)"
+                        continue
+                    else:
+                        logger.info(f"[Google AI Filter] {reason}")
+
+                # Image is approved: rename to sequential index
+                ext = os.path.splitext(temp_path)[1].lower()
+                final_name = f"{target_file_idx:03d}{ext}"
+                final_path = os.path.join(output_dir, final_name)
+                if os.path.exists(final_path):
+                    os.remove(final_path)
+                os.rename(temp_path, final_path)
+
+                downloaded_files.append(final_path)
+                self._progress["current_image"] = len(downloaded_files)
+                self._progress["message"] = f"[Google] Downloaded {len(downloaded_files)}/{num_images} for '{query}'"
 
                 if self.delay > 0:
                     time.sleep(self.delay * 0.2)

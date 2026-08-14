@@ -48,6 +48,8 @@ const API = {
     startScrape: (data) => API.post('/api/scrape/start', data),
     stopScrape: () => API.post('/api/scrape/stop'),
     getScrapeStatus: () => API.get('/api/scrape/status'),
+    getDetectorStatus: () => API.get('/api/detector/status'),
+    getLocalSDStatus: () => API.get('/api/local_sd/status'),
     getImages: () => API.get('/api/images'),
     getImagesForPosition: (pos) => API.get(`/api/images/${encodeURIComponent(pos)}`),
 };
@@ -287,6 +289,20 @@ async function loadScrapePanel() {
     const data = await API.getPositions(target);
     state.positions = data.positions || [];
 
+    // Load active detector status
+    try {
+        const detector = await API.getDetectorStatus();
+        const badge = document.getElementById('lbl-active-vision-engine');
+        if (badge) {
+            badge.textContent = detector.active_engine || 'Free Vision (Auto)';
+        }
+        if (document.getElementById('scrape-only-ai') && typeof detector.only_ai_person === 'boolean') {
+            document.getElementById('scrape-only-ai').checked = detector.only_ai_person;
+        }
+    } catch (e) {
+        console.error('Detector status error:', e);
+    }
+
     updateScrapeUI();
     checkScrapeStatus();
 }
@@ -309,6 +325,7 @@ async function startScrape() {
     const count = parseInt(document.getElementById('scrape-count')?.value || '40');
     const searchSuffix = document.getElementById('scrape-suffix')?.value?.trim() ?? 'Single Person Asian';
     const topUp = document.getElementById('scrape-top-up')?.checked ?? true;
+    const onlyAiPerson = document.getElementById('scrape-only-ai')?.checked ?? true;
 
     const positionIds = state.selectedPositions.size > 0
         ? Array.from(state.selectedPositions)
@@ -326,6 +343,7 @@ async function startScrape() {
             count: count,
             search_suffix: searchSuffix,
             top_up: topUp,
+            only_ai_person: onlyAiPerson,
         });
 
         if (result.error) {
@@ -333,13 +351,15 @@ async function startScrape() {
             return;
         }
 
-        showToast(`Started scraping ${result.positions_count} positions via ${state.selectedSource}`, 'success');
-        addLog(`Started ${state.selectedSource} scraping for ${result.positions_count} positions (top_up=${topUp})`, 'info');
+        const filterNotice = onlyAiPerson ? ' [🤖 AI Person Filter ON]' : '';
+        showToast(`Started scraping ${result.positions_count} positions via ${state.selectedSource}${filterNotice}`, 'success');
+        addLog(`Started ${state.selectedSource} scraping for ${result.positions_count} positions (top_up=${topUp}, only_ai_person=${onlyAiPerson})`, 'info');
         startProgressStream();
     } catch (err) {
         showToast('Failed to start scraping', 'error');
     }
 }
+
 
 
 async function stopScrape() {
@@ -431,6 +451,7 @@ function updateProgressUI(progress) {
         <div class="progress-info">
             <span>✅ Downloaded: ${progress.downloaded}</span>
             <span>❌ Failed: ${progress.failed}</span>
+            ${progress.filtered ? `<span style="color:#c084fc;font-weight:600;">🤖 Real Photos Filtered: ${progress.filtered}</span>` : ''}
             <span>Status: ${progress.status.toUpperCase()}</span>
         </div>
         ${progress.message ? `<div class="progress-message">${escapeHtml(progress.message)}</div>` : ''}
@@ -577,9 +598,38 @@ async function loadSettings() {
         if (document.getElementById('setting-suffix')) {
             document.getElementById('setting-suffix').value = settings.search_suffix || 'Single Person Asian';
         }
+        if (document.getElementById('setting-only-ai')) {
+            document.getElementById('setting-only-ai').checked = settings.only_ai_person ?? false;
+        }
+        if (document.getElementById('setting-local-sd-url')) {
+            document.getElementById('setting-local-sd-url').value = settings.local_sd_url || 'http://127.0.0.1:7860';
+        }
         document.getElementById('setting-delay').value = settings.download_delay || 2;
+
+        const detector = await API.getDetectorStatus();
+        const engineEl = document.getElementById('settings-vision-engine');
+        if (engineEl) {
+            engineEl.textContent = detector.active_engine || 'Free Vision (Auto)';
+        }
+
+        checkLocalSDStatus();
     } catch (err) {
         console.error('Settings load error:', err);
+    }
+}
+
+async function checkLocalSDStatus() {
+    const el = document.getElementById('settings-local-sd-status');
+    if (!el) return;
+    el.textContent = 'Checking...';
+    el.style.color = 'var(--text-muted)';
+    try {
+        const res = await API.getLocalSDStatus();
+        el.textContent = res.status;
+        el.style.color = res.online ? '#4ade80' : '#f87171';
+    } catch (e) {
+        el.textContent = 'Offline';
+        el.style.color = '#f87171';
     }
 }
 
@@ -589,16 +639,21 @@ async function saveSettings() {
         openai_api_key: document.getElementById('setting-openai-key').value,
         images_per_position: parseInt(document.getElementById('setting-images-count').value),
         search_suffix: document.getElementById('setting-suffix')?.value || 'Single Person Asian',
+        only_ai_person: document.getElementById('setting-only-ai')?.checked ?? false,
+        local_sd_url: document.getElementById('setting-local-sd-url')?.value || 'http://127.0.0.1:7860',
         download_delay: parseInt(document.getElementById('setting-delay').value),
     };
 
     try {
         await API.updateSettings(data);
         showToast('Settings saved!', 'success');
+        loadSettings();
     } catch (err) {
         showToast('Failed to save settings', 'error');
     }
 }
+
+
 
 
 // ============================================================

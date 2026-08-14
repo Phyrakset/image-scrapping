@@ -22,65 +22,109 @@ class PinterestScraper(BaseScraper):
     def source_name(self) -> str:
         return "Pinterest"
 
-    def scrape(self, query: str, output_dir: str, num_images: int, start_offset: int = 0) -> List[str]:
+    def scrape(
+        self,
+        query: str,
+        output_dir: str,
+        num_images: int,
+        start_offset: int = 0,
+        only_ai_person: bool = False,
+        detector=None,
+    ) -> List[str]:
         """
         Search Pinterest for images matching the query and download them into output_dir.
+        Optionally filters to only keep AI-generated person images.
         """
         if self.is_stopped():
             return []
 
         downloaded_files = []
+        effective_query = query
+        if only_ai_person:
+            ai_keywords = ["AI generated", "AI art", "Midjourney", "AI portrait"]
+            if not any(kw.lower() in query.lower() for kw in ai_keywords):
+                effective_query = f"{query} AI generated person Midjourney"
 
         try:
             from pinterest_dl import PinterestDL
 
-            logger.info(f"[Pinterest] Searching for '{query}' — target: {num_images} images")
-            self._progress["message"] = f"[Pinterest] Searching: {query}"
+            logger.info(f"[Pinterest] Searching for '{effective_query}' — target: {num_images} images (offset {start_offset}, only_ai={only_ai_person})")
+            self._progress["message"] = f"[Pinterest] Searching: {effective_query}"
             self._progress["total_images"] = num_images
             self._progress["current_image"] = 0
 
             pdl = PinterestDL.with_api()
 
+            # If filtering, we fetch more candidates to account for rejected real photos
+            fetch_count = num_images * 3 if only_ai_person else num_images
+
             def on_progress(media):
                 if self.is_stopped():
                     return
                 self._progress["current_image"] = min(self._progress["current_image"] + 1, num_images)
-                self._progress["message"] = f"[Pinterest] Found {self._progress['current_image']}/{num_images} for '{query}'"
+                self._progress["message"] = f"[Pinterest] Downloaded {self._progress['current_image']}/{num_images} for '{query}'"
 
             # Download using pinterest-dl search_and_download
             pdl.search_and_download(
-                query=query,
+                query=effective_query,
                 output_dir=output_dir,
-                num=num_images,
+                num=fetch_count,
                 min_resolution=(0, 0),
                 delay=self.delay,
                 on_progress=on_progress
             )
 
-            # Get downloaded files and standardize/sort sequential filenames if needed
+            # Get downloaded files and standardize/sort
             if os.path.exists(output_dir):
                 raw_files = [
-                    f for f in os.listdir(output_dir)
-                    if os.path.isfile(os.path.join(output_dir, f)) and not f.startswith('.')
+                    os.path.join(output_dir, f)
+                    for f in os.listdir(output_dir)
+                    if os.path.isfile(os.path.join(output_dir, f)) and not f.startswith('.') and not f.startswith('temp_')
                 ]
-                
-                # Sort files by creation time or name to maintain order
-                raw_files.sort(key=lambda f: os.path.getmtime(os.path.join(output_dir, f)))
+                raw_files.sort(key=lambda f: os.path.getmtime(f))
 
+                valid_files = []
+                for fpath in raw_files:
+                    if len(valid_files) >= num_images or self.is_stopped():
+                        # Remove extra excess candidates if over target
+                        if len(valid_files) >= num_images and not fpath.startswith("temp_"):
+                            try:
+                                os.remove(fpath)
+                            except Exception:
+                                pass
+                        continue
+
+                    # AI Person Filter
+                    if only_ai_person and detector:
+                        self._progress["message"] = f"[Pinterest AI Filter] Inspecting image {len(valid_files) + 1}/{num_images}..."
+                        is_ai, reason = detector.is_ai_person(fpath)
+                        if not is_ai:
+                            logger.info(f"[Pinterest AI Filter] {reason}")
+                            try:
+                                os.remove(fpath)
+                            except Exception:
+                                pass
+                            self._progress["filtered"] = self._progress.get("filtered", 0) + 1
+                            self._progress["message"] = f"[AI Filter] Excluded real person ({self._progress['filtered']} rejected, {len(valid_files)}/{num_images} kept)"
+                            continue
+                        else:
+                            logger.info(f"[Pinterest AI Filter] {reason}")
+
+                    valid_files.append(fpath)
+
+                # Renumber valid surviving files sequentially
                 renamed_files = []
-                for idx, fname in enumerate(raw_files, start=1):
-                    ext = os.path.splitext(fname)[1].lower()
+                for idx, fpath in enumerate(valid_files, start=start_offset + 1):
+                    ext = os.path.splitext(fpath)[1].lower()
                     if not ext:
                         ext = ".jpg"
                     
                     new_name = f"{idx:03d}{ext}"
-                    old_path = os.path.join(output_dir, fname)
                     new_path = os.path.join(output_dir, new_name)
                     
-                    if old_path != new_path:
-                        # Avoid overwrite conflicts
+                    if fpath != new_path:
                         temp_path = os.path.join(output_dir, f"temp_{idx}{ext}")
-                        os.rename(old_path, temp_path)
+                        os.rename(fpath, temp_path)
                         if os.path.exists(new_path):
                             os.remove(new_path)
                         os.rename(temp_path, new_path)
@@ -89,6 +133,7 @@ class PinterestScraper(BaseScraper):
                         renamed_files.append(new_path)
 
                 downloaded_files = renamed_files
+                self._progress["current_image"] = len(downloaded_files)
 
         except ImportError:
             logger.error("[Pinterest] pinterest-dl not installed. Run: pip install pinterest-dl")

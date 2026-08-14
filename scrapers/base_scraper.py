@@ -17,6 +17,7 @@ class BaseScraper(ABC):
             "total_images": 0,
             "downloaded": 0,
             "failed": 0,
+            "filtered": 0,
             "message": "",
             "positions_done": 0,
             "positions_total": 0,
@@ -29,7 +30,15 @@ class BaseScraper(ABC):
         return self.__class__.__name__
 
     @abstractmethod
-    def scrape(self, query: str, output_dir: str, num_images: int, start_offset: int = 0) -> list[str]:
+    def scrape(
+        self,
+        query: str,
+        output_dir: str,
+        num_images: int,
+        start_offset: int = 0,
+        only_ai_person: bool = False,
+        detector=None,
+    ) -> list[str]:
         """
         Scrape/download images for a given query.
 
@@ -38,6 +47,8 @@ class BaseScraper(ABC):
             output_dir: Directory to save images.
             num_images: Number of images to download.
             start_offset: Number of pre-existing images in folder (for file index offsetting).
+            only_ai_person: If True, filter out real persons and keep only AI-generated persons.
+            detector: AIPersonDetector instance for visual classification.
 
         Returns:
             List of downloaded file paths.
@@ -51,6 +62,8 @@ class BaseScraper(ABC):
         num_images: int,
         search_suffix: str = "Single Person Asian",
         top_up: bool = False,
+        only_ai_person: bool = False,
+        detector=None,
     ) -> dict:
         """
         Scrape images for multiple positions sequentially.
@@ -61,6 +74,8 @@ class BaseScraper(ABC):
             num_images: Target number of images per position.
             search_suffix: Suffix to append to search query (e.g. "Single Person Asian").
             top_up: If True, only download missing images needed to reach target num_images.
+            only_ai_person: If True, filter out real person photos and keep only AI-generated persons.
+            detector: AIPersonDetector instance.
 
         Returns:
             Summary dict with results per position.
@@ -69,6 +84,7 @@ class BaseScraper(ABC):
         self._progress["status"] = "running"
         self._progress["positions_total"] = len(positions)
         self._progress["positions_done"] = 0
+        self._progress["filtered"] = 0
 
         results = {}
 
@@ -112,7 +128,14 @@ class BaseScraper(ABC):
             self._progress["message"] = f"Scraping {to_download} images for '{search_query}' (has {existing_count}/{num_images})"
 
             try:
-                downloaded = self.scrape(search_query, output_dir, to_download, start_offset=start_offset)
+                downloaded = self.scrape(
+                    search_query,
+                    output_dir,
+                    to_download,
+                    start_offset=start_offset,
+                    only_ai_person=only_ai_person,
+                    detector=detector,
+                )
                 results[position] = {
                     "status": "success",
                     "count": len(downloaded),

@@ -4,6 +4,7 @@ pinterest-dl
 playwright
 requests
 Pillow
+numpy
 google-generativeai
 openai
 python-dotenv

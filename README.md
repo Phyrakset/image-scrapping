@@ -10,7 +10,11 @@ Built with Python, Flask, Playwright, `pinterest-dl`, and a dark glassmorphism A
 
 - 📌 **Pinterest Scraper**: High-speed image extraction using `pinterest-dl` with API and browser fallbacks.
 - 🔍 **Google Images Scraper**: Automated browser scraping via Playwright (Chromium).
-- ✨ **AI Image Generation**: Support for Google Gemini (Imagen 3) & OpenAI (DALL-E 3).
+- 🖥️ **Local Stable Diffusion Generation**: Generate unlimited AI images 100% locally on your computer via SD WebUI (Automatic1111 / Fooocus / ComfyUI).
+- 🤖 **AI-Generated Person Filter**: Automatically detects and rejects real human photos, keeping **only AI-generated / synthetic person images**.
+- 👁️ **100% Free & Unlimited Local Vision**: Built-in 2D Fourier Spectrum (FFT) & texture analysis engine + local Ollama support (0 API keys, 0 limits).
+- ✨ **Cloud AI Generators**: Support for Google Gemini (Imagen 3) & OpenAI (DALL-E 3).
+
 - 🏷️ **Search Query Modifier**: Automatically appends search terms (e.g. `"Single Person Asian"`) to position queries while storing images cleanly in position-named folders.
 - 🔢 **Sequential Image Ordering**: Saves downloaded images in order (`001.jpg`, `002.jpg`, `003.jpg`, ...).
 - 📋 **Position Manager**: Manage job positions directly from `position.text` (Search, Select, Add, Delete).
@@ -31,6 +35,7 @@ d:\WorkingNa\TverKar-ImageScrapping\
 ├── position.text               # Position titles list
 ├── scrapers/
 │   ├── base_scraper.py         # Abstract base scraper class
+│   ├── ai_detector.py          # AI Person detector & Free Vision classifier
 │   ├── pinterest_scraper.py    # Pinterest scraper (pinterest-dl)
 │   ├── google_scraper.py       # Google Images scraper (Playwright)
 │   └── ai_generator.py         # AI image generator (Gemini / OpenAI)

@@ -13,6 +13,7 @@ import config
 from scrapers.pinterest_scraper import PinterestScraper
 from scrapers.google_scraper import GoogleImageScraper
 from scrapers.ai_generator import AIImageGenerator
+from scrapers.ai_detector import AIPersonDetector
 
 # Configure logging
 logging.basicConfig(
@@ -34,9 +35,12 @@ settings = {
     "openai_api_key": config.OPENAI_API_KEY,
     "images_per_position": config.IMAGES_PER_POSITION,
     "search_suffix": config.SEARCH_SUFFIX,
+    "only_ai_person": config.ONLY_AI_PERSON,
+    "local_sd_url": config.LOCAL_SD_URL,
     "download_delay": config.DOWNLOAD_DELAY,
     "base_download_dir": config.BASE_DOWNLOAD_DIR,
 }
+
 
 
 # -------------------------------------------------------------------
@@ -199,6 +203,7 @@ def api_scrape_start():
     search_suffix = data.get("search_suffix", settings["search_suffix"])
     top_up = data.get("top_up", True)
     only_incomplete = data.get("only_incomplete", False)
+    only_ai_person = data.get("only_ai_person", settings.get("only_ai_person", False))
 
     all_positions = load_positions()
     folder_stats = get_folder_stats(settings["base_download_dir"])
@@ -242,32 +247,47 @@ def api_scrape_start():
             api_key=settings["openai_api_key"],
             delay=max(delay, 3),
         )
+    elif source == "ai_local_sd":
+        active_scraper = AIImageGenerator(
+            provider="local_sd",
+            api_key="",
+            delay=max(delay, 1),
+            local_sd_url=settings.get("local_sd_url", "http://127.0.0.1:7860"),
+        )
     else:
         return jsonify({"error": f"Unknown source: {source}"}), 400
+
 
     # Start scraping in background thread
     def run_scrape():
         global scrape_results
         base_dir = settings["base_download_dir"]
         os.makedirs(base_dir, exist_ok=True)
+        detector = AIPersonDetector(
+            gemini_api_key=settings["gemini_api_key"],
+            openai_api_key=settings["openai_api_key"],
+        )
         scrape_results = active_scraper.scrape_positions(
             selected,
             base_dir,
             count,
             search_suffix=search_suffix,
             top_up=top_up,
+            only_ai_person=only_ai_person,
+            detector=detector,
         )
 
     scrape_thread = threading.Thread(target=run_scrape, daemon=True)
     scrape_thread.start()
 
     return jsonify({
-        "message": f"Started {source} scraping for {len(selected)} positions (top_up={top_up})",
+        "message": f"Started {source} scraping for {len(selected)} positions (top_up={top_up}, only_ai_person={only_ai_person})",
         "source": source,
         "positions_count": len(selected),
         "images_per_position": count,
         "search_suffix": search_suffix,
         "top_up": top_up,
+        "only_ai_person": only_ai_person,
     })
 
 
@@ -392,11 +412,59 @@ def api_update_settings():
         settings["images_per_position"] = int(data["images_per_position"])
     if "search_suffix" in data:
         settings["search_suffix"] = str(data["search_suffix"]).strip()
+    if "only_ai_person" in data:
+        settings["only_ai_person"] = bool(data["only_ai_person"])
+    if "local_sd_url" in data:
+        settings["local_sd_url"] = str(data["local_sd_url"]).strip()
     if "download_delay" in data:
         settings["download_delay"] = int(data["download_delay"])
 
-
     return jsonify({"message": "Settings updated", "settings": api_get_settings().get_json()})
+
+
+@app.route("/api/local_sd/status", methods=["GET"])
+def api_local_sd_status():
+    """Check if Local Stable Diffusion WebUI API is running and reachable."""
+    import requests
+    url = settings.get("local_sd_url", "http://127.0.0.1:7860").rstrip("/")
+    try:
+        r = requests.get(f"{url}/sdapi/v1/options", timeout=2)
+        is_online = r.status_code == 200
+    except Exception:
+        is_online = False
+    return jsonify({
+        "url": url,
+        "online": is_online,
+        "status": "Online (Ready to generate)" if is_online else "Offline (WebUI not detected)",
+    })
+
+
+@app.route("/api/detector/status", methods=["GET"])
+def api_detector_status():
+    """Get status of AI Vision models and active detection mode."""
+    detector = AIPersonDetector(
+        gemini_api_key=settings["gemini_api_key"],
+        openai_api_key=settings["openai_api_key"],
+    )
+    has_gemini = bool(settings["gemini_api_key"] and "..." not in settings["gemini_api_key"] and settings["gemini_api_key"] != "your_gemini_api_key_here")
+    has_openai = bool(settings["openai_api_key"] and "..." not in settings["openai_api_key"] and settings["openai_api_key"] != "your_openai_api_key_here")
+    has_ollama = detector._is_ollama_available()
+
+    active_engine = "Local Visual Engine (100% Free & Unlimited)"
+    if has_gemini:
+        active_engine = "Google Gemini Flash (Free Vision)"
+    elif has_ollama:
+        active_engine = "Local Ollama Vision (100% Free & Unlimited)"
+    elif has_openai:
+        active_engine = "OpenAI GPT-4o-mini Vision"
+
+    return jsonify({
+        "gemini_configured": has_gemini,
+        "openai_configured": has_openai,
+        "ollama_available": has_ollama,
+        "active_engine": active_engine,
+        "only_ai_person": settings["only_ai_person"],
+    })
 
 
 # -------------------------------------------------------------------

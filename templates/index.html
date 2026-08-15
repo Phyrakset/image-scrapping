@@ -212,6 +212,11 @@
                     <div>AI — OpenAI</div>
                     <div class="source-desc">Generate with DALL-E 3</div>
                 </button>
+                <button class="source-tab" data-source="ai_local_sd" onclick="selectSource('ai_local_sd')">
+                    <div class="source-icon">🖥️</div>
+                    <div>Local SD (Free)</div>
+                    <div class="source-desc">Generate via Local Stable Diffusion</div>
+                </button>
             </div>
 
             <!-- Scrape Config -->
@@ -255,6 +260,21 @@
                             <small style="color:var(--text-muted);display:block;margin-top:6px;line-height:1.4;">
                                 Only downloads the remaining count needed to reach <span class="lbl-target-count">40</span> (e.g., if position has 38 images, downloads 2 more). Preserves existing images cleanly.
                             </small>
+                        </div>
+
+                        <!-- AI Person Filter Toggle -->
+                        <div class="form-group" style="background:linear-gradient(135deg, rgba(168,85,247,0.12), rgba(6,182,212,0.12));padding:14px;border-radius:8px;border:1px solid rgba(168,85,247,0.35);margin-top:12px;">
+                            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:600;color:#c084fc;">
+                                <input type="checkbox" id="scrape-only-ai" checked style="width:18px;height:18px;accent-color:#a855f7;" />
+                                <span>🤖 Only AI-Generated Person Images (Filter Out Real Persons)</span>
+                            </label>
+                            <small style="color:var(--text-secondary);display:block;margin-top:6px;line-height:1.4;">
+                                Detects and excludes photographs of real humans using free Vision analysis, saving <b>only AI-generated / synthetic persons</b>.
+                            </small>
+                            <div style="margin-top:8px;font-size:0.8rem;display:flex;align-items:center;gap:6px;">
+                                <span style="color:var(--text-muted);">Active Vision Engine:</span>
+                                <span id="lbl-active-vision-engine" class="badge" style="background:rgba(168,85,247,0.2);color:#e9d5ff;border:1px solid rgba(168,85,247,0.4);">Checking...</span>
+                            </div>
                         </div>
 
                         <div style="display:flex;gap:12px;margin-top:20px;">
@@ -327,19 +347,44 @@
                     </div>
                     <div class="card-body">
                         <div class="settings-section">
-                            <h4>✨ Google Gemini</h4>
+                            <h4>✨ Google Gemini (Free Vision & Image Gen)</h4>
                             <div class="form-group">
                                 <label for="setting-gemini-key">Gemini API Key</label>
                                 <input type="password" id="setting-gemini-key" placeholder="Enter your Gemini API key..." />
+                                <small style="color:var(--text-muted);display:block;margin-top:4px;">
+                                    💡 100% Free API key available at <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent-cyan);text-decoration:underline;">Google AI Studio</a>. Enables free Gemini Flash Vision detection.
+                                </small>
                             </div>
                         </div>
                         <div class="settings-section">
-                            <h4>🤖 OpenAI</h4>
+                            <h4>🤖 OpenAI (Vision & DALL-E)</h4>
                             <div class="form-group">
                                 <label for="setting-openai-key">OpenAI API Key</label>
                                 <input type="password" id="setting-openai-key" placeholder="Enter your OpenAI API key..." />
                             </div>
                         </div>
+                        <div class="settings-section">
+                            <h4>🖥️ Local Stable Diffusion WebUI (Automatic1111 / Fooocus)</h4>
+                            <div class="form-group">
+                                <label for="setting-local-sd-url">Local SD API URL</label>
+                                <input type="text" id="setting-local-sd-url" placeholder="http://127.0.0.1:7860" value="http://127.0.0.1:7860" />
+                                <small style="color:var(--text-muted);display:block;margin-top:4px;">
+                                    Make sure your local WebUI is started with <code>--api</code> (e.g., <code>webui-user.bat --api</code>).
+                                </small>
+                            </div>
+                            <div style="background:var(--bg-glass);padding:8px 12px;border-radius:6px;font-size:0.85rem;display:flex;align-items:center;justify-content:space-between;">
+                                <span>Status: <b id="settings-local-sd-status" style="color:var(--text-muted);">Checking...</b></span>
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="checkLocalSDStatus()">🔄 Check</button>
+                            </div>
+                        </div>
+                        <div class="settings-section" style="margin-top:16px;">
+                            <h4>⚡ Active Vision Model</h4>
+                            <div style="background:var(--bg-glass);padding:10px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);">
+                                <div style="font-weight:600;color:var(--accent-cyan);" id="settings-vision-engine">Detecting...</div>
+                                <small style="color:var(--text-muted);font-size:0.8rem;">Used automatically when "Only AI-Generated Person Images" filter is turned on.</small>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
 
@@ -355,6 +400,12 @@
                         <div class="form-group">
                             <label for="setting-suffix">Default Search Query Suffix</label>
                             <input type="text" id="setting-suffix" value="Single Person Asian" placeholder="e.g. Single Person Asian" />
+                        </div>
+                        <div class="form-group">
+                            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:500;">
+                                <input type="checkbox" id="setting-only-ai" style="width:16px;height:16px;accent-color:var(--accent-cyan);" />
+                                <span>Default: Only AI-Generated Person Images (Filter out Real Persons)</span>
+                            </label>
                         </div>
                         <div class="form-group">
                             <label for="setting-delay">Delay Between Downloads (seconds)</label>

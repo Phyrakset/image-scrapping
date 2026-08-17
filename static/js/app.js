@@ -183,8 +183,8 @@ function setPosFilter(filter) {
 async function loadPositions() {
     const target = parseInt(document.getElementById('scrape-count')?.value || '40');
     try {
-        const positions = await API.getPositions(target);
-        state.positions = positions;
+        const res = await API.getPositions(target);
+        state.positions = Array.isArray(res) ? res : (res?.positions || []);
         const searchVal = document.getElementById('position-search')?.value || '';
         renderPositions(searchVal);
     } catch (err) {
@@ -204,8 +204,8 @@ function renderPositions(filter = '') {
         return pos.name.toLowerCase().includes(q);
     });
 
-    const completeCount = state.positions.filter(p => p.is_complete).length;
-    const incompleteCount = state.positions.filter(p => !p.is_complete).length;
+    const completeCount = state.positions.filter(p => (p.images_downloaded || 0) >= target).length;
+    const incompleteCount = state.positions.filter(p => (p.images_downloaded || 0) < target).length;
 
     const cntAll = document.getElementById('cnt-filter-all');
     const cntComplete = document.getElementById('cnt-filter-complete');
@@ -216,9 +216,9 @@ function renderPositions(filter = '') {
 
     let list = allFiltered;
     if (currentPosFilter === 'complete') {
-        list = allFiltered.filter(p => p.is_complete);
+        list = allFiltered.filter(p => (p.images_downloaded || 0) >= target);
     } else if (currentPosFilter === 'incomplete') {
-        list = allFiltered.filter(p => !p.is_complete);
+        list = allFiltered.filter(p => (p.images_downloaded || 0) < target);
     }
 
     if (list.length === 0) {
@@ -234,8 +234,8 @@ function renderPositions(filter = '') {
     container.innerHTML = list.map(pos => {
         const isSelected = state.selectedPositions.has(pos.id);
         const count = pos.images_downloaded || 0;
-        const isComplete = pos.is_complete;
-        const missing = pos.missing_count || 0;
+        const isComplete = (pos.images_downloaded || 0) >= target;
+        const missing = pos.missing_images ?? Math.max(0, target - (pos.images_downloaded || 0));
 
         let badgeHtml = '';
         if (isComplete) {

@@ -346,16 +346,15 @@ async function deletePosition(id) {
 // Scrape
 // ============================================================
 const modelDescriptions = {
-    'majicmix': '💡 <b>MajicMIX Realistic v7:</b> Top specialized model for natural Asian skin, authentic facial features, and realistic worker uniforms.',
-    'flux_schnell': '💡 <b>FLUX.1 [schnell]:</b> 12B Flow Transformer (World #1). Flawless hands, lifelike anatomy, and DSLR realism.',
-    'realvisxl': '💡 <b>RealVisXL:</b> Gold standard for studio lighting and DSLR portraits (1024x1024).',
-    'juggernaut': '💡 <b>Juggernaut XL:</b> Specialist for workplace settings, uniforms, factory/office environments, and tools (1024x1024).',
-    'realistic_vision': '💡 <b>Realistic Vision v6.0:</b> Ultra-fast photorealism generating crisp portraits in just 2–4 seconds (512x512).',
-    'epicrealism': '💡 <b>EpiCRealism:</b> Candid documentary-style workplace photography with authentic natural lighting.'
+    'realvisxl': '💡 <b>RealVisXL v4.0:</b> Gold standard for authentic human skin, pores, natural eyes, and Asian portraits (1024x1024).',
+    'juggernaut': '💡 <b>Juggernaut XL v9:</b> Specialist for workplace settings, authentic uniforms, tools, and machines (1024x1024).',
+    'majicmix': '💡 <b>MajicMIX Realistic v7:</b> Specialized model for Asian personas and authentic facial features (512x512).',
+    'epicrealism': '💡 <b>EpiCRealism:</b> Candid, unposed documentary workplace photography with natural daylight (512x512).',
+    'realistic_vision': '💡 <b>Realistic Vision v6.0:</b> Ultra-fast photorealism generating crisp portraits in just 2–4 seconds (512x512).'
 };
 
 function onModelSelectChange() {
-    const val = document.getElementById('local-sd-model')?.value || 'majicmix';
+    const val = document.getElementById('local-sd-model')?.value || 'realvisxl';
     const descEl = document.getElementById('model-desc-text');
     if (descEl && modelDescriptions[val]) {
         descEl.innerHTML = modelDescriptions[val];
@@ -403,7 +402,7 @@ async function startScrape() {
     const searchSuffix = document.getElementById('scrape-suffix')?.value?.trim() ?? 'Single Person Asian';
     const topUp = document.getElementById('scrape-top-up')?.checked ?? true;
     const onlyAiPerson = document.getElementById('scrape-only-ai')?.checked ?? true;
-    const localSdModel = document.getElementById('local-sd-model')?.value || 'majicmix';
+    const localSdModel = document.getElementById('local-sd-model')?.value || 'realvisxl';
 
     const positionIds = state.selectedPositions.size > 0
         ? Array.from(state.selectedPositions)

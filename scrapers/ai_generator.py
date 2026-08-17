@@ -6,6 +6,7 @@ import io
 import time
 import base64
 import logging
+import requests
 
 from scrapers.base_scraper import BaseScraper
 

@@ -226,15 +226,15 @@
                         <h3><span class="icon">⚙️</span> Configuration</h3>
                     </div>
                     <div class="card-body">
-                        <- Available Space: ~98 Local SD Model Selector -->
+                        <!-- Local SD Model Selector -->
                         <div class="form-group" id="local-sd-model-group" style="display:none;background:linear-gradient(135deg, rgba(124, 58, 237, 0.15), rgba(59, 130, 246, 0.15));padding:14px;border-radius:8px;border:1px solid rgba(124, 58, 237, 0.3);margin-bottom:16px;">
                             <label for="local-sd-model" style="display:flex;align-items:center;justify-content:space-between;color:#a78bfa;font-weight:600;">
                                 <span>🎨 Local AI Diffusion Model</span>
                                 <span style="font-size:0.75rem;padding:2px 8px;border-radius:12px;background:rgba(124,58,237,0.3);color:#e9d5ff;">Hot-Swappable GPU</span>
                             </label>
                             <select id="local-sd-model" class="form-control" style="margin-top:6px;background:rgba(15,23,42,0.8);border:1px solid rgba(124,58,237,0.4);color:#fff;font-weight:500;" onchange="onModelSelectChange()">
-                                <option value="realvisxl" selected>🌟 RealVisXL v4.0 (SDXL 1024×1024 — Photorealism Specialist)</option>
-                                <option value="juggernaut">🏢 Juggernaut XL v9 (SDXL 1024×1024 — Workplace & Uniforms)</option>
+                                <option value="juggernaut" selected>🏢 Juggernaut XL v9 (SDXL 1024×1024 — Workplace & Uniforms)</option>
+                                <option value="realvisxl">🌟 RealVisXL v4.0 (SDXL 1024×1024 — Photorealism Specialist)</option>
                                 <option value="majicmix">🌸 MajicMIX Realistic v7 (Asian Portrait Specialist)</option>
                                 <option value="epicrealism">📷 EpiCRealism (SD 1.5 — Candid Documentary)</option>
                                 <option value="realistic_vision">⚡ Realistic Vision v6.0 (SD 1.5 — Ultra Fast 3s)</option>
@@ -467,7 +467,7 @@
     </main>
 </div>
 
-<script src="/static/js/app.js?v=1.4"></script>
+<script src="/static/js/app.js?v=1.5"></script>
 <script>
     // Update position count badge after load
     (async () => {

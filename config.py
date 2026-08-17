@@ -46,3 +46,8 @@ OPENROUTER_PROFILES = {
 }
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", OPENROUTER_PROFILES["sophy_coder"]["key"])
+
+# Flask Server Config
+FLASK_HOST = os.environ.get("FLASK_HOST", "0.0.0.0")
+FLASK_PORT = int(os.environ.get("FLASK_PORT", 5000))
+FLASK_DEBUG = os.environ.get("FLASK_DEBUG", "True").lower() in ("true", "1", "yes")

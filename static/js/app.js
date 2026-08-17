@@ -480,6 +480,21 @@ function updateProgressUI(progress) {
             <span>Status: ${progress.status.toUpperCase()}</span>
         </div>
         ${progress.message ? `<div class="progress-message">${escapeHtml(progress.message)}</div>` : ''}
+        
+        ${progress.current_position ? `
+        <div style="margin-top:14px;padding:12px;background:linear-gradient(135deg, rgba(59,130,246,0.15), rgba(168,85,247,0.15));border:1px solid rgba(168,85,247,0.3);border-radius:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <div style="font-size:0.85rem;color:#e2e8f0;">
+                📂 <b>Saved in:</b> <code style="color:var(--accent-cyan);background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:4px;">downloads/${escapeHtml(progress.current_position)}/</code>
+            </div>
+            <div style="display:flex;gap:8px;">
+                <button class="btn btn-sm btn-primary" onclick="quickViewGallery('${escapeAttr(progress.current_position)}')">
+                    🖼️ View in Gallery
+                </button>
+                <a href="/api/download_zip/${encodeURIComponent(progress.current_position)}" class="btn btn-sm btn-secondary" style="text-decoration:none;">
+                    ⬇️ Download ZIP
+                </a>
+            </div>
+        </div>` : ''}
     `;
 }
 
@@ -516,45 +531,109 @@ function updateScrapeUI() {
     }
 }
 
+
 // ============================================================
-// Gallery
+// Gallery System
 // ============================================================
+state.gallerySort = 'recent';
+state.galleryData = {};
+
+function quickViewGallery(position) {
+    navigateTo('gallery');
+    openFolder(position);
+}
+
+function setGallerySort(sortType) {
+    state.gallerySort = sortType;
+    document.querySelectorAll('#gallery-toolbar .filter-tabs button').forEach(b => {
+        b.classList.toggle('active', b.id === `gallery-sort-${sortType}`);
+    });
+    renderGalleryFolders();
+}
+
+function filterGallery() {
+    renderGalleryFolders();
+}
+
 async function loadGallery() {
     const container = document.getElementById('gallery-content');
+    const toolbar = document.getElementById('gallery-toolbar');
     if (!container) return;
 
     if (state.galleryPosition) {
+        if (toolbar) toolbar.style.display = 'none';
         await loadGalleryImages(state.galleryPosition);
         return;
     }
 
+    if (toolbar) toolbar.style.display = 'block';
+
     try {
         const images = await API.getImages();
-        const folders = Object.entries(images);
-
-        if (folders.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon">🖼️</div>
-                    <p>No images downloaded yet. Go to Scrape to start downloading!</p>
-                </div>`;
-            return;
-        }
-
-        container.innerHTML = `
-            <div class="folder-grid">
-                ${folders.map(([name, info]) => `
-                    <div class="folder-card" onclick="openFolder('${escapeAttr(name)}')">
-                        <div class="folder-icon">📁</div>
-                        <div class="folder-name">${escapeHtml(name)}</div>
-                        <div class="folder-count">${info.count} images</div>
-                    </div>
-                `).join('')}
-            </div>`;
+        state.galleryData = images;
+        renderGalleryFolders();
     } catch (err) {
         console.error('Gallery load error:', err);
         container.innerHTML = '<div class="empty-state"><p>Failed to load gallery</p></div>';
     }
+}
+
+function renderGalleryFolders() {
+    const container = document.getElementById('gallery-content');
+    if (!container) return;
+
+    const searchTerm = (document.getElementById('gallery-search')?.value || '').toLowerCase().trim();
+    let entries = Object.entries(state.galleryData || {});
+
+    if (entries.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">🖼️</div>
+                <p>No images downloaded yet. Go to Scrape Images to generate or download images!</p>
+            </div>`;
+        return;
+    }
+
+    // Filter by search
+    if (searchTerm) {
+        entries = entries.filter(([name]) => name.toLowerCase().includes(searchTerm));
+    }
+
+    // Sort entries
+    if (state.gallerySort === 'recent') {
+        entries.sort((a, b) => (b[1].mtime || 0) - (a[1].mtime || 0));
+    } else if (state.gallerySort === 'name') {
+        entries.sort((a, b) => a[0].localeCompare(b[0]));
+    } else if (state.gallerySort === 'count') {
+        entries.sort((a, b) => (b[1].count || 0) - (a[1].count || 0));
+    }
+
+    if (entries.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <p>No positions match "${escapeHtml(searchTerm)}"</p>
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="folder-grid">
+            ${entries.map(([name, info], idx) => {
+                const isRecent = idx < 3 && state.gallerySort === 'recent';
+                return `
+                <div class="folder-card" style="position:relative;cursor:pointer;" onclick="openFolder('${escapeAttr(name)}')">
+                    ${isRecent ? `<span style="position:absolute;top:8px;right:8px;font-size:0.7rem;background:rgba(168,85,247,0.3);color:#e9d5ff;padding:2px 6px;border-radius:10px;border:1px solid rgba(168,85,247,0.5);">✨ Recent</span>` : ''}
+                    <div class="folder-icon">📁</div>
+                    <div class="folder-name" style="font-weight:600;">${escapeHtml(name)}</div>
+                    <div class="folder-count" style="color:var(--accent-cyan);font-size:0.85rem;">${info.count} images</div>
+                    <div style="margin-top:8px;display:flex;gap:6px;width:100%;" onclick="event.stopPropagation()">
+                        <a href="/api/download_zip/${encodeURIComponent(name)}" class="btn btn-sm btn-secondary" style="width:100%;text-align:center;font-size:0.75rem;padding:4px 8px;text-decoration:none;">
+                            ⬇️ ZIP
+                        </a>
+                    </div>
+                </div>
+            `;}).join('')}
+        </div>`;
 }
 
 async function openFolder(position) {
@@ -562,14 +641,21 @@ async function openFolder(position) {
 
     const container = document.getElementById('gallery-content');
     const header = document.getElementById('gallery-header');
+    const toolbar = document.getElementById('gallery-toolbar');
+    if (toolbar) toolbar.style.display = 'none';
     if (!container) return;
 
     header.innerHTML = `
-        <h3>
-            <span class="icon">🖼️</span>
-            <button class="btn btn-sm btn-secondary" onclick="backToGallery()" style="margin-right:8px;">← Back</button>
-            ${escapeHtml(position)}
-        </h3>
+        <div style="display:flex;align-items:center;justify-content:space-between;width:100%;flex-wrap:wrap;gap:12px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <button class="btn btn-sm btn-secondary" onclick="backToGallery()">← Back to All Folders</button>
+                <h3 style="margin:0;">📁 ${escapeHtml(position)}</h3>
+            </div>
+            <div style="display:flex;gap:8px;">
+                <button class="btn btn-sm btn-secondary" onclick="copyFolderPath('${escapeAttr(position)}')">📋 Copy Folder Path</button>
+                <a href="/api/download_zip/${encodeURIComponent(position)}" class="btn btn-sm btn-primary" style="text-decoration:none;">⬇️ Download All (.ZIP)</a>
+            </div>
+        </div>
     `;
 
     try {
@@ -581,173 +667,41 @@ async function openFolder(position) {
         }
 
         container.innerHTML = `
+            <div style="margin-bottom:14px;padding:8px 12px;background:rgba(255,255,255,0.03);border-radius:6px;font-size:0.85rem;color:var(--text-muted);display:flex;align-items:center;justify-content:space-between;">
+                <span>📂 <b>Disk Path:</b> <code id="disk-path-txt" style="color:var(--accent-cyan);">/home/jupyter/WORKINGNA/image-scrapping/downloads/${escapeHtml(position)}/</code></span>
+                <span><b>${data.count}</b> images</span>
+            </div>
             <div class="gallery-grid">
-                ${data.images.map(img => `
-                    <div class="gallery-item" onclick="openLightbox('${escapeAttr(img.url)}')">
+                ${data.images.map((img, idx) => `
+                    <div class="gallery-item" onclick="openLightbox('${escapeAttr(img.url)}', '${escapeAttr(position)}', ${idx})">
                         <img src="${img.url}" alt="${escapeAttr(img.name)}" loading="lazy" />
-                        <div class="overlay">${escapeHtml(img.name)}</div>
+                        <div class="overlay">
+                            <span class="img-name">${escapeHtml(img.name)}</span>
+                            <div class="overlay-actions">
+                                <a href="${img.url}" download="${escapeAttr(img.name)}" class="btn btn-sm btn-primary" onclick="event.stopPropagation()">⬇️</a>
+                            </div>
+                        </div>
                     </div>
                 `).join('')}
-            </div>`;
+            </div>
+        `;
     } catch (err) {
+        console.error('Folder load error:', err);
         container.innerHTML = '<div class="empty-state"><p>Failed to load images</p></div>';
     }
 }
 
-function backToGallery() {
-    state.galleryPosition = null;
-    document.getElementById('gallery-header').innerHTML = '<h3><span class="icon">🖼️</span> Image Gallery</h3>';
-    loadGallery();
-}
-
-function openLightbox(url) {
-    const lightbox = document.getElementById('lightbox');
-    const img = document.getElementById('lightbox-img');
-    img.src = url;
-    lightbox.classList.add('show');
-}
-
-function closeLightbox() {
-    document.getElementById('lightbox').classList.remove('show');
-}
-
-// ============================================================
-// Settings
-// ============================================================
-async function loadSettings() {
-    try {
-        const settings = await API.getSettings();
-        document.getElementById('setting-gemini-key').value = settings.gemini_api_key || '';
-        document.getElementById('setting-openai-key').value = settings.openai_api_key || '';
-        document.getElementById('setting-images-count').value = settings.images_per_position || 30;
-        if (document.getElementById('setting-suffix')) {
-            document.getElementById('setting-suffix').value = settings.search_suffix || 'Single Person Asian';
-        }
-        if (document.getElementById('setting-only-ai')) {
-            document.getElementById('setting-only-ai').checked = settings.only_ai_person ?? false;
-        }
-        if (document.getElementById('setting-local-sd-url')) {
-            document.getElementById('setting-local-sd-url').value = settings.local_sd_url || 'http://127.0.0.1:7860';
-        }
-        document.getElementById('setting-delay').value = settings.download_delay || 2;
-
-        const detector = await API.getDetectorStatus();
-        const engineEl = document.getElementById('settings-vision-engine');
-        if (engineEl) {
-            engineEl.textContent = detector.active_engine || 'Free Vision (Auto)';
-        }
-
-        checkLocalSDStatus();
-    } catch (err) {
-        console.error('Settings load error:', err);
-    }
-}
-
-async function checkLocalSDStatus() {
-    const el = document.getElementById('settings-local-sd-status');
-    if (!el) return;
-    el.textContent = 'Checking...';
-    el.style.color = 'var(--text-muted)';
-    try {
-        const res = await API.getLocalSDStatus();
-        el.textContent = res.status;
-        el.style.color = res.online ? '#4ade80' : '#f87171';
-    } catch (e) {
-        el.textContent = 'Offline';
-        el.style.color = '#f87171';
-    }
-}
-
-async function saveSettings() {
-    const data = {
-        gemini_api_key: document.getElementById('setting-gemini-key').value,
-        openai_api_key: document.getElementById('setting-openai-key').value,
-        images_per_position: parseInt(document.getElementById('setting-images-count').value),
-        search_suffix: document.getElementById('setting-suffix')?.value || 'Single Person Asian',
-        only_ai_person: document.getElementById('setting-only-ai')?.checked ?? false,
-        local_sd_url: document.getElementById('setting-local-sd-url')?.value || 'http://127.0.0.1:7860',
-        download_delay: parseInt(document.getElementById('setting-delay').value),
-    };
-
-    try {
-        await API.updateSettings(data);
-        showToast('Settings saved!', 'success');
-        loadSettings();
-    } catch (err) {
-        showToast('Failed to save settings', 'error');
-    }
-}
-
-
-
-
-// ============================================================
-// Logs
-// ============================================================
-function addLog(message, type = 'info') {
-    const now = new Date().toLocaleTimeString();
-    state.logs.unshift({ time: now, message, type });
-    if (state.logs.length > 100) state.logs.pop();
-    renderLogs();
-}
-
-function renderLogs() {
-    const panel = document.getElementById('log-panel');
-    if (!panel) return;
-
-    panel.innerHTML = state.logs.map(log => `
-        <div class="log-line">
-            <span class="log-time">[${log.time}]</span>
-            <span class="log-text ${log.type}">${escapeHtml(log.message)}</span>
-        </div>
-    `).join('');
-}
-
-// ============================================================
-// Toast
-// ============================================================
-function showToast(message, type = 'info') {
-    const container = document.getElementById('toast-container');
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.innerHTML = `
-        <span>${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}</span>
-        <span>${escapeHtml(message)}</span>
-    `;
-    container.appendChild(toast);
-
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateX(100px)';
-        toast.style.transition = 'all 0.3s ease';
-        setTimeout(() => toast.remove(), 300);
-    }, 4000);
-}
-
-// ============================================================
-// Utilities
-// ============================================================
-function escapeHtml(str) {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
-
-function escapeAttr(str) {
-    return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-}
-
-// ============================================================
-// Init
-// ============================================================
-document.addEventListener('DOMContentLoaded', () => {
-    // Nav click handlers
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.addEventListener('click', () => navigateTo(item.dataset.page));
+function copyFolderPath(position) {
+    const fullPath = `/home/jupyter/WORKINGNA/image-scrapping/downloads/${position}/`;
+    navigator.clipboard.writeText(fullPath).then(() => {
+        showToast('📋 Copied full folder path to clipboard!', 'success');
+    }).catch(() => {
+        prompt('Folder Path:', fullPath);
     });
+}
 
-    // Lightbox close
+
+// // Lightbox close
     document.getElementById('lightbox')?.addEventListener('click', (e) => {
         if (e.target === e.currentTarget) closeLightbox();
     });

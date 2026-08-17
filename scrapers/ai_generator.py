@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 class AIImageGenerator(BaseScraper):
     """Generate and download images using AI (Local Stable Diffusion, Gemini Imagen, or OpenAI DALL-E)."""
 
-    def __init__(self, provider: str = "gemini", api_key: str = "", delay: int = 3, local_sd_url: str = "http://127.0.0.1:7860"):
+    def __init__(self, provider: str = "gemini", api_key: str = "", delay: int = 3, local_sd_url: str = "http://127.0.0.1:7860", local_sd_model: str = "realvisxl"):
+        self.local_sd_model = local_sd_model
         """
         Args:
             provider: "local_sd", "gemini", or "openai"
@@ -224,14 +225,21 @@ class AIImageGenerator(BaseScraper):
             self._progress["message"] = f"[AI/LocalSD] Generating {idx + 1}/{num_images}: {query}"
 
             prompt = self._create_prompt(query, idx)
+            negative_prompt = (
+                "3d render, cgi, digital art, illustration, cartoon, anime, airbrushed, plastic skin, "
+                "smooth skin, porcelain face, doll, dramatic studio lighting, dark moody room, spotlight on face, "
+                "glamor portrait, heavy makeup, fake, oversaturated, video game character, watermark, text, "
+                "disfigured, bad hands, extra limbs, deformed fingers"
+            )
             payload = {
-                "prompt": f"{prompt}, masterpiece, 8k resolution, photorealistic, cinematic lighting, sharp focus",
-                "negative_prompt": "blurry, low quality, deformed, disfigured, distorted face, bad anatomy, bad hands, extra limbs, watermark, text",
+                "model": self.local_sd_model,
+                "prompt": prompt,
+                "negative_prompt": negative_prompt,
                 "steps": 25,
                 "width": 512,
                 "height": 512,
-                "cfg_scale": 7.0,
-                "sampler_name": "Euler a",
+                "cfg_scale": 6.5,
+                "sampler_name": "DPM++ 2M Karras",
                 "batch_size": 1,
                 "n_iter": 1,
             }
@@ -269,16 +277,14 @@ class AIImageGenerator(BaseScraper):
 
     @staticmethod
     def _create_prompt(position: str, variation_index: int) -> str:
-        """Create a varied prompt for AI image generation."""
+        """Create a varied, ultra-realistic documentary photography prompt for realistic human workers."""
         variations = [
-            f"Professional photograph of a {position} at work in their typical workplace, realistic, high quality, candid shot",
-            f"A {position} performing their daily tasks, professional environment, natural lighting, editorial photography",
-            f"Portrait of a {position} in action at their workplace, professional quality, realistic style",
-            f"Documentary-style photo of a {position} working on the job, authentic workplace setting, high resolution",
-            f"A skilled {position} in their work environment, showing typical equipment and setting, professional photo",
-            f"Real workplace photo of a {position}, showing the job in action, natural and authentic, professional quality",
-            f"Candid photo of a {position} during a regular workday, realistic workplace, professional photography",
-            f"A {position} demonstrating their craft at work, professional setting, high-quality realistic image",
+            f"Raw candid documentary photograph of an Asian {position} actively working on tasks in a bright well-lit workplace, holding real work tools, natural posture, authentic work attire, captured on 35mm lens, natural daytime ambient lighting, real human skin texture with subtle pores, unedited photo",
+            f"Authentic workplace color photo of a skilled Asian {position} on a regular workday, realistic environment with authentic background equipment, natural window daylight, candid shot, lifelike facial expression, realistic clothing fabric folds",
+            f"Candid editorial photo of an Asian {position} performing job duties in an authentic facility, natural ambient light, genuine human skin texture, sharp details, realistic everyday work uniform, documentary photography style",
+            f"Realistic documentary action shot of an Asian {position} focused on their craft, real equipment in background, bright natural lighting, authentic skin pores and texture, candid work scene, shot on professional camera",
+            f"Authentic on-site photo of an Asian {position} inspecting work progress, natural daytime lighting, realistic workplace setting, candid and natural, unposed documentary photography, true to life colors",
+            f"Candid photo of an Asian {position} at their workstation during a normal shift, well-lit room, natural ambient light, genuine work gear, authentic human features and skin texture",
         ]
         return variations[variation_index % len(variations)]
 

@@ -248,11 +248,13 @@ def api_scrape_start():
             delay=max(delay, 3),
         )
     elif source == "ai_local_sd":
+        local_sd_model = data.get("local_sd_model", "realvisxl")
         active_scraper = AIImageGenerator(
             provider="local_sd",
             api_key="",
             delay=max(delay, 1),
             local_sd_url=settings.get("local_sd_url", "http://127.0.0.1:7860"),
+            local_sd_model=local_sd_model,
         )
     else:
         return jsonify({"error": f"Unknown source: {source}"}), 400
@@ -353,11 +355,63 @@ def api_scrape_results():
 # API: Images / Gallery
 # -------------------------------------------------------------------
 
+
+import io
+import zipfile
+from flask import send_file
+
+def get_folder_stats_enhanced(base_dir):
+    stats = {}
+    if not os.path.exists(base_dir):
+        return stats
+    image_exts = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"}
+    for item in os.listdir(base_dir):
+        item_path = os.path.join(base_dir, item)
+        if os.path.isdir(item_path):
+            files = [f for f in os.listdir(item_path) if os.path.splitext(f)[1].lower() in image_exts]
+            mtime = os.path.getmtime(item_path)
+            stats[item] = {
+                "count": len(files),
+                "mtime": mtime,
+                "path": item_path,
+                "preview": f"/downloads/{item}/{files[0]}" if files else None
+            }
+    return stats
+
 @app.route("/api/images", methods=["GET"])
 def api_images_overview():
-    """List all position folders with image counts."""
-    stats = get_folder_stats(settings["base_download_dir"])
+    """List all position folders with image counts, previews, and timestamps."""
+    stats = get_folder_stats_enhanced(settings["base_download_dir"])
     return jsonify(stats)
+
+@app.route("/api/download_zip/<path:position>", methods=["GET"])
+def api_download_folder_zip(position):
+    """Download all images in a position folder as a zip file."""
+    folder_path = os.path.join(settings["base_download_dir"], position)
+    if not os.path.exists(folder_path):
+        return jsonify({"error": f"Folder not found: {position}"}), 404
+
+    image_exts = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"}
+    files = [f for f in os.listdir(folder_path) if os.path.splitext(f)[1].lower() in image_exts]
+    
+    if not files:
+        return jsonify({"error": "No images to download"}), 400
+
+    memory_file = io.BytesIO()
+    with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for filename in files:
+            file_path = os.path.join(folder_path, filename)
+            zf.write(file_path, arcname=filename)
+
+    memory_file.seek(0)
+    safe_name = position.replace(' ', '_').replace('/', '_')
+    return send_file(
+        memory_file,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name=f"{safe_name}_images.zip"
+    )
+
 
 
 @app.route("/api/images/<path:position>", methods=["GET"])
@@ -488,6 +542,29 @@ def api_stats():
         "total_images": total_images,
         "positions_with_images": folders_with_images,
         "scraper_status": scraper_status,
+    })
+
+
+# -------------------------------------------------------------------
+
+@app.route("/api/local_sd/models")
+def get_local_sd_models():
+    """Return available local SD models."""
+    local_sd_url = settings.get("local_sd_url", "http://127.0.0.1:7860").rstrip("/")
+    try:
+        resp = requests.get(f"{local_sd_url}/sdapi/v1/models", timeout=2)
+        if resp.status_code == 200:
+            return jsonify(resp.json())
+    except Exception:
+        pass
+    return jsonify({
+        "current_model": "realvisxl",
+        "models": {
+            "realvisxl": {"name": "🌟 RealVisXL v4.0 (SDXL 1024x1024)", "description": "Gold standard for photorealistic human portraits & Asian personas."},
+            "juggernaut": {"name": "🏢 Juggernaut XL v9 (SDXL 1024x1024)", "description": "Specialist for workplace settings, uniforms, and tools."},
+            "realistic_vision": {"name": "⚡ Realistic Vision v6.0 (SD 1.5 - Fast 3s)", "description": "High-speed photorealistic portraits."},
+            "epicrealism": {"name": "📷 EpiCRealism (SD 1.5 - Candid)", "description": "Candid documentary-style workplace photography."}
+        }
     })
 
 

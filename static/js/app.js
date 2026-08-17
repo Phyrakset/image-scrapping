@@ -1,57 +1,101 @@
 /**
- * TverKar Image Scrapping — Admin Dashboard Frontend
+ * TverKar Image Scrapping — Main Frontend Logic
  */
 
-// ============================================================
-// State
-// ============================================================
+// State Management
 const state = {
     currentPage: 'dashboard',
+    selectedSource: 'ai_local_sd',
     positions: [],
     selectedPositions: new Set(),
-    selectedSource: 'pinterest',
-    stats: {},
-    scrapeStatus: null,
-    eventSource: null,
     galleryPosition: null,
+    gallerySort: 'recent',
+    galleryData: {},
     logs: [],
-    posFilter: 'all', // 'all', 'complete', 'incomplete'
+    stats: {},
+    scrapeStatus: { status: 'idle' },
+    eventSource: null,
 };
 
-// ============================================================
-// API
-// ============================================================
+// API Client
 const API = {
-    async get(url) {
+    async getPositions(target) {
+        const url = target ? `/api/positions?target=${target}` : '/api/positions';
         const res = await fetch(url);
         return res.json();
     },
-    async post(url, data) {
-        const res = await fetch(url, {
+
+    async addPosition(name) {
+        const res = await fetch('/api/positions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data),
+            body: JSON.stringify({ name }),
         });
         return res.json();
     },
-    async del(url) {
-        const res = await fetch(url, { method: 'DELETE' });
+
+    async deletePosition(id) {
+        const res = await fetch(`/api/positions/${id}`, { method: 'DELETE' });
         return res.json();
     },
 
-    getPositions: (target = 40) => API.get(`/api/positions?target=${target}`),
-    addPosition: (name) => API.post('/api/positions', { name }),
-    deletePosition: (id) => API.del(`/api/positions/${id}`),
-    getStats: () => API.get('/api/stats'),
-    getSettings: () => API.get('/api/settings'),
-    updateSettings: (data) => API.post('/api/settings', data),
-    startScrape: (data) => API.post('/api/scrape/start', data),
-    stopScrape: () => API.post('/api/scrape/stop'),
-    getScrapeStatus: () => API.get('/api/scrape/status'),
-    getDetectorStatus: () => API.get('/api/detector/status'),
-    getLocalSDStatus: () => API.get('/api/local_sd/status'),
-    getImages: () => API.get('/api/images'),
-    getImagesForPosition: (pos) => API.get(`/api/images/${encodeURIComponent(pos)}`),
+    async startScrape(options) {
+        const res = await fetch('/api/scrape/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(options),
+        });
+        return res.json();
+    },
+
+    async stopScrape() {
+        const res = await fetch('/api/scrape/stop', { method: 'POST' });
+        return res.json();
+    },
+
+    async getScrapeStatus() {
+        const res = await fetch('/api/scrape/status');
+        return res.json();
+    },
+
+    async getImages() {
+        const res = await fetch('/api/images');
+        return res.json();
+    },
+
+    async getImagesForPosition(position) {
+        const res = await fetch(`/api/images/${encodeURIComponent(position)}`);
+        return res.json();
+    },
+
+    async getSettings() {
+        const res = await fetch('/api/settings');
+        return res.json();
+    },
+
+    async updateSettings(settings) {
+        const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(settings),
+        });
+        return res.json();
+    },
+
+    async getStats() {
+        const res = await fetch('/api/stats');
+        return res.json();
+    },
+
+    async getDetectorStatus() {
+        const res = await fetch('/api/detector/status');
+        return res.json();
+    },
+
+    async getLocalSDStatus() {
+        const res = await fetch('/api/local_sd/status');
+        return res.json();
+    },
 };
 
 // ============================================================
@@ -65,19 +109,22 @@ function navigateTo(page) {
         item.classList.toggle('active', item.dataset.page === page);
     });
 
-    // Show correct section
-    document.querySelectorAll('.page-section').forEach(section => {
-        section.classList.toggle('active', section.id === `page-${page}`);
+    // Update sections
+    document.querySelectorAll('.page-section').forEach(sec => {
+        sec.classList.remove('active');
     });
 
-    // Load page data
-    switch (page) {
-        case 'dashboard': loadDashboard(); break;
-        case 'positions': loadPositions(); break;
-        case 'scrape': loadScrapePanel(); break;
-        case 'gallery': loadGallery(); break;
-        case 'settings': loadSettings(); break;
+    const activeSection = document.getElementById(`page-${page}`);
+    if (activeSection) {
+        activeSection.classList.add('active');
     }
+
+    // Trigger page-specific loads
+    if (page === 'dashboard') loadDashboard();
+    if (page === 'positions') loadPositions();
+    if (page === 'scrape') loadScrapePage();
+    if (page === 'gallery') loadGallery();
+    if (page === 'settings') loadSettings();
 }
 
 // ============================================================
@@ -88,12 +135,13 @@ async function loadDashboard() {
         const stats = await API.getStats();
         state.stats = stats;
 
-        document.getElementById('stat-positions').textContent = stats.total_positions || 0;
-        document.getElementById('stat-images').textContent = stats.total_images || 0;
-        document.getElementById('stat-folders').textContent = stats.positions_with_images || 0;
+        const elPos = document.getElementById('stat-positions') || document.getElementById('stat-total-positions');
+        const elImg = document.getElementById('stat-images') || document.getElementById('stat-total-images');
+        const elFolders = document.getElementById('stat-folders') || document.getElementById('stat-positions-with-images');
 
-        const statusEl = document.getElementById('stat-status');
-        statusEl.textContent = (stats.scraper_status || 'idle').toUpperCase();
+        if (elPos) elPos.textContent = stats.total_positions ?? 0;
+        if (elImg) elImg.textContent = stats.total_images ?? 0;
+        if (elFolders) elFolders.textContent = stats.positions_with_images ?? 0;
 
         updateStatusBadge(stats.scraper_status || 'idle');
     } catch (err) {
@@ -102,92 +150,113 @@ async function loadDashboard() {
 }
 
 function updateStatusBadge(status) {
-    const badge = document.getElementById('global-status');
+    const badge = document.getElementById('stat-status') || document.getElementById('stat-scraper-status');
     if (!badge) return;
-    badge.className = `status-badge ${status}`;
-    badge.querySelector('.status-text').textContent = status.toUpperCase();
+
+    badge.className = `stat-value status-badge ${status}`;
+    const labels = {
+        idle: 'IDLE',
+        running: 'RUNNING',
+        paused: 'PAUSED',
+        completed: 'COMPLETED',
+        stopped: 'STOPPED',
+        error: 'ERROR',
+    };
+    badge.textContent = labels[status] || status.toUpperCase();
 }
 
 // ============================================================
 // Positions
 // ============================================================
+let currentPosFilter = 'all';
+
+function setPosFilter(filter) {
+    currentPosFilter = filter;
+    ['all', 'complete', 'incomplete'].forEach(f => {
+        const btn = document.getElementById(`tab-filter-${f}`);
+        if (btn) btn.classList.toggle('active', f === filter);
+    });
+    const searchVal = document.getElementById('position-search')?.value || '';
+    renderPositions(searchVal);
+}
+
 async function loadPositions() {
+    const target = parseInt(document.getElementById('scrape-count')?.value || '40');
     try {
-        const target = parseInt(document.getElementById('scrape-count')?.value || '40');
-        const data = await API.getPositions(target);
-        state.positions = data.positions || [];
-
-        // Update counts in tabs
-        const completeCnt = data.complete_total || 0;
-        const incompleteCnt = data.incomplete_total || 0;
-
-        if (document.getElementById('cnt-filter-all')) document.getElementById('cnt-filter-all').textContent = state.positions.length;
-        if (document.getElementById('cnt-filter-complete')) document.getElementById('cnt-filter-complete').textContent = completeCnt;
-        if (document.getElementById('cnt-filter-incomplete')) document.getElementById('cnt-filter-incomplete').textContent = incompleteCnt;
-
-        renderPositions();
+        const res = await API.getPositions(target);
+        state.positions = Array.isArray(res) ? res : (res?.positions || []);
+        const searchVal = document.getElementById('position-search')?.value || '';
+        renderPositions(searchVal);
     } catch (err) {
         console.error('Positions load error:', err);
     }
 }
 
-function setPosFilter(filter) {
-    state.posFilter = filter;
-    ['all', 'complete', 'incomplete'].forEach(f => {
-        const btn = document.getElementById(`tab-filter-${f}`);
-        if (btn) btn.classList.toggle('active', f === filter);
+function renderPositions(filter = '') {
+    const container = document.getElementById('position-list');
+    if (!container) return;
+
+    const target = parseInt(document.getElementById('scrape-count')?.value || '40');
+    const q = filter.toLowerCase().trim();
+
+    let allFiltered = state.positions.filter(pos => {
+        if (!q) return true;
+        return pos.name.toLowerCase().includes(q);
     });
-    renderPositions();
-}
 
-function renderPositions(searchFilter = '') {
-    const list = document.getElementById('position-list');
-    if (!list) return;
+    const completeCount = state.positions.filter(p => (p.images_downloaded || 0) >= target).length;
+    const incompleteCount = state.positions.filter(p => (p.images_downloaded || 0) < target).length;
 
-    const targetCount = parseInt(document.getElementById('scrape-count')?.value || '40');
+    const cntAll = document.getElementById('cnt-filter-all');
+    const cntComplete = document.getElementById('cnt-filter-complete');
+    const cntIncomplete = document.getElementById('cnt-filter-incomplete');
+    if (cntAll) cntAll.textContent = state.positions.length;
+    if (cntComplete) cntComplete.textContent = completeCount;
+    if (cntIncomplete) cntIncomplete.textContent = incompleteCount;
 
-    let filtered = state.positions;
-
-    // Apply search filter
-    if (searchFilter) {
-        filtered = filtered.filter(p => p.name.toLowerCase().includes(searchFilter.toLowerCase()));
+    let list = allFiltered;
+    if (currentPosFilter === 'complete') {
+        list = allFiltered.filter(p => (p.images_downloaded || 0) >= target);
+    } else if (currentPosFilter === 'incomplete') {
+        list = allFiltered.filter(p => (p.images_downloaded || 0) < target);
     }
 
-    // Apply tab filter
-    if (state.posFilter === 'complete') {
-        filtered = filtered.filter(p => p.images_downloaded >= targetCount);
-    } else if (state.posFilter === 'incomplete') {
-        filtered = filtered.filter(p => p.images_downloaded < targetCount);
-    }
-
-    if (filtered.length === 0) {
-        list.innerHTML = `
+    if (list.length === 0) {
+        container.innerHTML = `
             <div class="empty-state">
-                <div class="empty-icon">📋</div>
-                <p>${searchFilter ? 'No positions match your search' : 'No positions found for this filter'}</p>
+                <div class="empty-icon">🔍</div>
+                <p>No positions match your filter</p>
             </div>`;
+        updateSelectCount();
         return;
     }
 
-    list.innerHTML = filtered.map(pos => {
+    container.innerHTML = list.map(pos => {
+        const isSelected = state.selectedPositions.has(pos.id);
         const count = pos.images_downloaded || 0;
-        const isInc = count < targetCount;
-        const missing = Math.max(0, targetCount - count);
+        const isComplete = (pos.images_downloaded || 0) >= target;
+        const missing = pos.missing_images ?? Math.max(0, target - (pos.images_downloaded || 0));
+
+        let badgeHtml = '';
+        if (isComplete) {
+            badgeHtml = `<span class="badge" style="background:rgba(34,197,94,0.15);color:#4ade80;border:1px solid rgba(34,197,94,0.3);font-size:0.75rem;">✓ ${count} / ${target}</span>`;
+        } else if (count > 0) {
+            badgeHtml = `<span class="badge" style="background:rgba(245,158,11,0.15);color:#fbbf24;border:1px solid rgba(245,158,11,0.3);font-size:0.75rem;">⚠️ ${count} / ${target} (need ${missing})</span>`;
+        } else {
+            badgeHtml = `<span class="badge" style="background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);font-size:0.75rem;">0 / ${target} (need ${missing})</span>`;
+        }
 
         return `
-        <div class="position-item ${isInc ? 'is-incomplete' : ''}" data-id="${pos.id}">
-            <input type="checkbox" ${state.selectedPositions.has(pos.id) ? 'checked' : ''}
-                   onchange="togglePosition(${pos.id})" />
-            <span class="pos-name">${escapeHtml(pos.name)}</span>
-            <span class="pos-count ${count > 0 ? (isInc ? 'has-images incomplete-badge' : 'has-images') : ''}">
-                ${count > 0 ? `📷 ${count}/${targetCount}` : `0/${targetCount}`}
-                ${isInc ? ` <span style="color:#f59e0b;font-weight:bold;margin-left:4px;">(Missing ${missing})</span>` : ''}
-            </span>
-            <button class="pos-delete" onclick="deletePosition(${pos.id}, '${escapeHtml(pos.name)}')" title="Delete">
-                🗑️
-            </button>
-        </div>
-    `;
+            <div class="position-item ${isSelected ? 'selected' : ''}" onclick="togglePosition(${pos.id})">
+                <input type="checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); togglePosition(${pos.id})" />
+                <span class="position-name">${escapeHtml(pos.name)}</span>
+                ${badgeHtml}
+                <div class="position-actions" onclick="event.stopPropagation()">
+                    <button class="btn btn-sm btn-secondary" onclick="quickViewGallery('${escapeAttr(pos.name)}')">📁 View</button>
+                    <button class="btn btn-sm btn-danger" onclick="deletePosition(${pos.id})">🗑️</button>
+                </div>
+            </div>
+        `;
     }).join('');
 
     updateSelectCount();
@@ -199,47 +268,39 @@ function togglePosition(id) {
     } else {
         state.selectedPositions.add(id);
     }
-    updateSelectCount();
+    const searchVal = document.getElementById('position-search')?.value || '';
+    renderPositions(searchVal);
+    updateScrapeUI();
 }
 
 function selectAllPositions() {
-    const searchFilter = document.getElementById('position-search')?.value || '';
-    const targetCount = parseInt(document.getElementById('scrape-count')?.value || '40');
-
-    let filtered = state.positions;
-    if (searchFilter) {
-        filtered = filtered.filter(p => p.name.toLowerCase().includes(searchFilter.toLowerCase()));
-    }
-    if (state.posFilter === 'complete') {
-        filtered = filtered.filter(p => p.images_downloaded >= targetCount);
-    } else if (state.posFilter === 'incomplete') {
-        filtered = filtered.filter(p => p.images_downloaded < targetCount);
-    }
-
-    filtered.forEach(p => state.selectedPositions.add(p.id));
-    renderPositions(searchFilter);
+    state.positions.forEach(p => state.selectedPositions.add(p.id));
+    const searchVal = document.getElementById('position-search')?.value || '';
+    renderPositions(searchVal);
+    updateScrapeUI();
 }
 
 function selectIncompletePositions() {
-    const targetCount = parseInt(document.getElementById('scrape-count')?.value || '40');
     state.selectedPositions.clear();
-
-    const incomplete = state.positions.filter(p => (p.images_downloaded || 0) < targetCount);
-    incomplete.forEach(p => state.selectedPositions.add(p.id));
-
-    setPosFilter('incomplete');
-    showToast(`Selected ${incomplete.length} positions with < ${targetCount} images`, 'info');
-}
-
-function selectIncompleteForScrape() {
-    selectIncompletePositions();
-    navigateTo('scrape');
+    state.positions.filter(p => !p.is_complete).forEach(p => state.selectedPositions.add(p.id));
+    const searchVal = document.getElementById('position-search')?.value || '';
+    renderPositions(searchVal);
+    updateScrapeUI();
 }
 
 function deselectAllPositions() {
     state.selectedPositions.clear();
-    const searchFilter = document.getElementById('position-search')?.value || '';
-    renderPositions(searchFilter);
+    const searchVal = document.getElementById('position-search')?.value || '';
+    renderPositions(searchVal);
+    updateScrapeUI();
+}
+
+function selectIncompleteForScrape() {
+    const target = parseInt(document.getElementById('scrape-count')?.value || '40');
+    state.selectedPositions.clear();
+    state.positions.filter(p => (p.images_downloaded || 0) < target).forEach(p => state.selectedPositions.add(p.id));
+    updateScrapeUI();
+    showToast(`Selected ${state.selectedPositions.size} incomplete positions`, 'info');
 }
 
 function updateSelectCount() {
@@ -251,30 +312,30 @@ function updateSelectCount() {
 
 async function addPosition() {
     const input = document.getElementById('new-position-input');
-    const name = input?.value?.trim();
+    const name = input.value.trim();
     if (!name) return;
 
     try {
         const result = await API.addPosition(name);
         if (result.error) {
             showToast(result.error, 'error');
-        } else {
-            showToast(`Added: ${name}`, 'success');
-            input.value = '';
-            loadPositions();
+            return;
         }
+        input.value = '';
+        showToast(`Added: ${name}`, 'success');
+        loadPositions();
     } catch (err) {
         showToast('Failed to add position', 'error');
     }
 }
 
-async function deletePosition(id, name) {
-    if (!confirm(`Delete position "${name}"?`)) return;
+async function deletePosition(id) {
+    if (!confirm('Are you sure you want to delete this position?')) return;
 
     try {
         await API.deletePosition(id);
-        showToast(`Deleted: ${name}`, 'success');
         state.selectedPositions.delete(id);
+        showToast('Position deleted', 'success');
         loadPositions();
     } catch (err) {
         showToast('Failed to delete position', 'error');
@@ -282,22 +343,32 @@ async function deletePosition(id, name) {
 }
 
 // ============================================================
-// Scraping
+// Scrape
 // ============================================================
-async function loadScrapePanel() {
-    const target = parseInt(document.getElementById('scrape-count')?.value || '40');
-    const data = await API.getPositions(target);
-    state.positions = data.positions || [];
+const modelDescriptions = {
+    'realvisxl': '💡 <b>RealVisXL v4.0:</b> Gold standard for authentic human skin, pores, natural eyes, and Asian portraits (1024x1024).',
+    'juggernaut': '💡 <b>Juggernaut XL v9:</b> Specialist for workplace settings, authentic uniforms, tools, and machines (1024x1024).',
+    'majicmix': '💡 <b>MajicMIX Realistic v7:</b> Specialized model for Asian personas and authentic facial features (512x512).',
+    'epicrealism': '💡 <b>EpiCRealism:</b> Candid, unposed documentary workplace photography with natural daylight (512x512).',
+    'realistic_vision': '💡 <b>Realistic Vision v6.0:</b> Ultra-fast photorealism generating crisp portraits in just 2–4 seconds (512x512).'
+};
 
-    // Load active detector status
+function onModelSelectChange() {
+    const val = document.getElementById('local-sd-model')?.value || 'realvisxl';
+    const descEl = document.getElementById('model-desc-text');
+    if (descEl && modelDescriptions[val]) {
+        descEl.innerHTML = modelDescriptions[val];
+    }
+}
+
+async function loadScrapePage() {
+    await loadPositions();
+
     try {
         const detector = await API.getDetectorStatus();
         const badge = document.getElementById('lbl-active-vision-engine');
         if (badge) {
-            badge.textContent = detector.active_engine || 'Free Vision (Auto)';
-        }
-        if (document.getElementById('scrape-only-ai') && typeof detector.only_ai_person === 'boolean') {
-            document.getElementById('scrape-only-ai').checked = detector.only_ai_person;
+            badge.textContent = detector.active_engine;
         }
     } catch (e) {
         console.error('Detector status error:', e);
@@ -319,6 +390,11 @@ function selectSource(source) {
     document.querySelectorAll('.source-tab').forEach(tab => {
         tab.classList.toggle('active', tab.dataset.source === source);
     });
+
+    const modelGroup = document.getElementById('local-sd-model-group');
+    if (modelGroup) {
+        modelGroup.style.display = (source === 'ai_local_sd') ? 'block' : 'none';
+    }
 }
 
 async function startScrape() {
@@ -326,6 +402,7 @@ async function startScrape() {
     const searchSuffix = document.getElementById('scrape-suffix')?.value?.trim() ?? 'Single Person Asian';
     const topUp = document.getElementById('scrape-top-up')?.checked ?? true;
     const onlyAiPerson = document.getElementById('scrape-only-ai')?.checked ?? true;
+    const localSdModel = document.getElementById('local-sd-model')?.value || 'realvisxl';
 
     const positionIds = state.selectedPositions.size > 0
         ? Array.from(state.selectedPositions)
@@ -339,6 +416,7 @@ async function startScrape() {
     try {
         const result = await API.startScrape({
             source: state.selectedSource,
+            local_sd_model: localSdModel,
             positions: positionIds,
             count: count,
             search_suffix: searchSuffix,
@@ -353,27 +431,25 @@ async function startScrape() {
 
         const filterNotice = onlyAiPerson ? ' [🤖 AI Person Filter ON]' : '';
         showToast(`Started scraping ${result.positions_count} positions via ${state.selectedSource}${filterNotice}`, 'success');
-        addLog(`Started ${state.selectedSource} scraping for ${result.positions_count} positions (top_up=${topUp}, only_ai_person=${onlyAiPerson})`, 'info');
+        addLog(`Started scrape: ${result.positions_count} positions via ${state.selectedSource}${filterNotice}`, 'info');
+
         startProgressStream();
     } catch (err) {
         showToast('Failed to start scraping', 'error');
     }
 }
 
-
-
 async function stopScrape() {
     try {
         await API.stopScrape();
-        showToast('Stop signal sent', 'info');
-        addLog('Stop requested', 'error');
+        showToast('Stopping scrape job...', 'info');
+        addLog('Stopping scrape job...', 'warn');
     } catch (err) {
         showToast('Failed to stop scraping', 'error');
     }
 }
 
 function startProgressStream() {
-    // Close existing stream
     if (state.eventSource) {
         state.eventSource.close();
     }
@@ -381,15 +457,22 @@ function startProgressStream() {
     state.eventSource = new EventSource('/api/scrape/stream');
 
     state.eventSource.onmessage = (event) => {
-        const progress = JSON.parse(event.data);
-        state.scrapeStatus = progress;
-        updateProgressUI(progress);
+        try {
+            const progress = JSON.parse(event.data);
+            state.scrapeStatus = progress;
+            updateProgressUI(progress);
 
-        if (['completed', 'error', 'stopped'].includes(progress.status)) {
-            state.eventSource.close();
-            state.eventSource = null;
-            addLog(`Scraping ${progress.status}: ${progress.message}`, progress.status === 'completed' ? 'success' : 'error');
-            loadDashboard();
+            if (progress.status === 'completed' || progress.status === 'stopped' || progress.status === 'error') {
+                state.eventSource.close();
+                state.eventSource = null;
+                loadDashboard();
+                loadPositions();
+                if (progress.status === 'completed') {
+                    showToast('Scraping completed successfully!', 'success');
+                }
+            }
+        } catch (e) {
+            console.error('SSE parse error:', e);
         }
     };
 
@@ -425,8 +508,10 @@ function updateProgressUI(progress) {
     const imgPercent = progress.total_images > 0
         ? Math.round((progress.current_image / progress.total_images) * 100) : 0;
 
-    document.getElementById('btn-start').disabled = isRunning;
-    document.getElementById('btn-stop').disabled = !isRunning;
+    const btnStart = document.getElementById('btn-start');
+    const btnStop = document.getElementById('btn-stop');
+    if (btnStart) btnStart.disabled = isRunning;
+    if (btnStop) btnStop.disabled = !isRunning;
 
     container.innerHTML = `
         <div class="progress-container">
@@ -455,6 +540,21 @@ function updateProgressUI(progress) {
             <span>Status: ${progress.status.toUpperCase()}</span>
         </div>
         ${progress.message ? `<div class="progress-message">${escapeHtml(progress.message)}</div>` : ''}
+        
+        ${progress.current_position ? `
+        <div style="margin-top:14px;padding:12px;background:linear-gradient(135deg, rgba(59,130,246,0.15), rgba(168,85,247,0.15));border:1px solid rgba(168,85,247,0.3);border-radius:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <div style="font-size:0.85rem;color:#e2e8f0;">
+                📂 <b>Saved in:</b> <code style="color:var(--accent-cyan);background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:4px;">downloads/${escapeHtml(progress.current_position)}/</code>
+            </div>
+            <div style="display:flex;gap:8px;">
+                <button class="btn btn-sm btn-primary" onclick="quickViewGallery('${escapeAttr(progress.current_position)}')">
+                    🖼️ View in Gallery
+                </button>
+                <a href="/api/download_zip/${encodeURIComponent(progress.current_position)}" class="btn btn-sm btn-secondary" style="text-decoration:none;">
+                    ⬇️ Download ZIP
+                </a>
+            </div>
+        </div>` : ''}
     `;
 }
 
@@ -492,60 +592,132 @@ function updateScrapeUI() {
 }
 
 // ============================================================
-// Gallery
+// Gallery System
 // ============================================================
+function quickViewGallery(position) {
+    navigateTo('gallery');
+    openFolder(position);
+}
+
+function setGallerySort(sortType) {
+    state.gallerySort = sortType;
+    document.querySelectorAll('#gallery-toolbar .filter-tabs button').forEach(b => {
+        b.classList.toggle('active', b.id === `gallery-sort-${sortType}`);
+    });
+    renderGalleryFolders();
+}
+
+function filterGallery() {
+    renderGalleryFolders();
+}
+
 async function loadGallery() {
     const container = document.getElementById('gallery-content');
+    const toolbar = document.getElementById('gallery-toolbar');
     if (!container) return;
 
     if (state.galleryPosition) {
+        if (toolbar) toolbar.style.display = 'none';
         await loadGalleryImages(state.galleryPosition);
         return;
     }
 
+    if (toolbar) toolbar.style.display = 'block';
+
     try {
         const images = await API.getImages();
-        const folders = Object.entries(images);
-
-        if (folders.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon">🖼️</div>
-                    <p>No images downloaded yet. Go to Scrape to start downloading!</p>
-                </div>`;
-            return;
-        }
-
-        container.innerHTML = `
-            <div class="folder-grid">
-                ${folders.map(([name, info]) => `
-                    <div class="folder-card" onclick="openFolder('${escapeAttr(name)}')">
-                        <div class="folder-icon">📁</div>
-                        <div class="folder-name">${escapeHtml(name)}</div>
-                        <div class="folder-count">${info.count} images</div>
-                    </div>
-                `).join('')}
-            </div>`;
+        state.galleryData = images;
+        renderGalleryFolders();
     } catch (err) {
         console.error('Gallery load error:', err);
         container.innerHTML = '<div class="empty-state"><p>Failed to load gallery</p></div>';
     }
 }
 
-async function openFolder(position) {
-    state.galleryPosition = position;
-
+function renderGalleryFolders() {
     const container = document.getElementById('gallery-content');
-    const header = document.getElementById('gallery-header');
     if (!container) return;
 
-    header.innerHTML = `
-        <h3>
-            <span class="icon">🖼️</span>
-            <button class="btn btn-sm btn-secondary" onclick="backToGallery()" style="margin-right:8px;">← Back</button>
-            ${escapeHtml(position)}
-        </h3>
-    `;
+    const searchTerm = (document.getElementById('gallery-search')?.value || '').toLowerCase().trim();
+    let entries = Object.entries(state.galleryData || {});
+
+    if (entries.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">🖼️</div>
+                <p>No images downloaded yet. Go to Scrape Images to generate or download images!</p>
+            </div>`;
+        return;
+    }
+
+    // Filter by search
+    if (searchTerm) {
+        entries = entries.filter(([name]) => name.toLowerCase().includes(searchTerm));
+    }
+
+    // Sort entries
+    if (state.gallerySort === 'recent') {
+        entries.sort((a, b) => (b[1].mtime || 0) - (a[1].mtime || 0));
+    } else if (state.gallerySort === 'name') {
+        entries.sort((a, b) => a[0].localeCompare(b[0]));
+    } else if (state.gallerySort === 'count') {
+        entries.sort((a, b) => (b[1].count || 0) - (a[1].count || 0));
+    }
+
+    if (entries.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <p>No positions match "${escapeHtml(searchTerm)}"</p>
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="folder-grid">
+            ${entries.map(([name, info], idx) => {
+                const isRecent = idx < 3 && state.gallerySort === 'recent';
+                return `
+                <div class="folder-card" style="position:relative;cursor:pointer;" onclick="openFolder('${escapeAttr(name)}')">
+                    ${isRecent ? `<span style="position:absolute;top:8px;right:8px;font-size:0.7rem;background:rgba(168,85,247,0.3);color:#e9d5ff;padding:2px 6px;border-radius:10px;border:1px solid rgba(168,85,247,0.5);">✨ Recent</span>` : ''}
+                    <div class="folder-icon">📁</div>
+                    <div class="folder-name" style="font-weight:600;">${escapeHtml(name)}</div>
+                    <div class="folder-count" style="color:var(--accent-cyan);font-size:0.85rem;">${info.count} images</div>
+                    <div style="margin-top:8px;display:flex;gap:6px;width:100%;" onclick="event.stopPropagation()">
+                        <a href="/api/download_zip/${encodeURIComponent(name)}" class="btn btn-sm btn-secondary" style="width:100%;text-align:center;font-size:0.75rem;padding:4px 8px;text-decoration:none;">
+                            ⬇️ ZIP
+                        </a>
+                    </div>
+                </div>
+            `;}).join('')}
+        </div>`;
+}
+
+async function openFolder(position) {
+    state.galleryPosition = position;
+    await loadGalleryImages(position);
+}
+
+async function loadGalleryImages(position) {
+    const container = document.getElementById('gallery-content');
+    const header = document.getElementById('gallery-header');
+    const toolbar = document.getElementById('gallery-toolbar');
+    if (toolbar) toolbar.style.display = 'none';
+    if (!container) return;
+
+    if (header) {
+        header.innerHTML = `
+            <div style="display:flex;align-items:center;justify-content:space-between;width:100%;flex-wrap:wrap;gap:12px;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <button class="btn btn-sm btn-secondary" onclick="backToGallery()">← Back to All Folders</button>
+                    <h3 style="margin:0;">📁 ${escapeHtml(position)}</h3>
+                </div>
+                <div style="display:flex;gap:8px;">
+                    <button class="btn btn-sm btn-secondary" onclick="copyFolderPath('${escapeAttr(position)}')">📋 Copy Folder Path</button>
+                    <a href="/api/download_zip/${encodeURIComponent(position)}" class="btn btn-sm btn-primary" style="text-decoration:none;">⬇️ Download All (.ZIP)</a>
+                </div>
+            </div>
+        `;
+    }
 
     try {
         const data = await API.getImagesForPosition(position);
@@ -556,34 +728,63 @@ async function openFolder(position) {
         }
 
         container.innerHTML = `
+            <div style="margin-bottom:14px;padding:8px 12px;background:rgba(255,255,255,0.03);border-radius:6px;font-size:0.85rem;color:var(--text-muted);display:flex;align-items:center;justify-content:space-between;">
+                <span>📂 <b>Disk Path:</b> <code id="disk-path-txt" style="color:var(--accent-cyan);">/home/jupyter/WORKINGNA/image-scrapping/downloads/${escapeHtml(position)}/</code></span>
+                <span><b>${data.count}</b> images</span>
+            </div>
             <div class="gallery-grid">
-                ${data.images.map(img => `
+                ${data.images.map((img, idx) => `
                     <div class="gallery-item" onclick="openLightbox('${escapeAttr(img.url)}')">
                         <img src="${img.url}" alt="${escapeAttr(img.name)}" loading="lazy" />
-                        <div class="overlay">${escapeHtml(img.name)}</div>
+                        <div class="overlay">
+                            <span class="img-name">${escapeHtml(img.name)}</span>
+                            <div class="overlay-actions">
+                                <a href="${img.url}" download="${escapeAttr(img.name)}" class="btn btn-sm btn-primary" onclick="event.stopPropagation()">⬇️</a>
+                            </div>
+                        </div>
                     </div>
                 `).join('')}
-            </div>`;
+            </div>
+        `;
     } catch (err) {
+        console.error('Folder load error:', err);
         container.innerHTML = '<div class="empty-state"><p>Failed to load images</p></div>';
     }
 }
 
 function backToGallery() {
     state.galleryPosition = null;
-    document.getElementById('gallery-header').innerHTML = '<h3><span class="icon">🖼️</span> Image Gallery</h3>';
+    const header = document.getElementById('gallery-header');
+    if (header) {
+        header.innerHTML = '<span class="icon">🖼️</span> Image Gallery';
+    }
     loadGallery();
 }
 
+function copyFolderPath(position) {
+    const fullPath = `/home/jupyter/WORKINGNA/image-scrapping/downloads/${position}/`;
+    navigator.clipboard.writeText(fullPath).then(() => {
+        showToast('📋 Copied full folder path to clipboard!', 'success');
+    }).catch(() => {
+        prompt('Folder Path:', fullPath);
+    });
+}
+
+// Lightbox
 function openLightbox(url) {
     const lightbox = document.getElementById('lightbox');
     const img = document.getElementById('lightbox-img');
-    img.src = url;
-    lightbox.classList.add('show');
+    if (img && lightbox) {
+        img.src = url;
+        lightbox.classList.add('show');
+    }
 }
 
 function closeLightbox() {
-    document.getElementById('lightbox').classList.remove('show');
+    const lightbox = document.getElementById('lightbox');
+    if (lightbox) {
+        lightbox.classList.remove('show');
+    }
 }
 
 // ============================================================
@@ -592,9 +793,15 @@ function closeLightbox() {
 async function loadSettings() {
     try {
         const settings = await API.getSettings();
-        document.getElementById('setting-gemini-key').value = settings.gemini_api_key || '';
-        document.getElementById('setting-openai-key').value = settings.openai_api_key || '';
-        document.getElementById('setting-images-count').value = settings.images_per_position || 30;
+        if (document.getElementById('setting-gemini-key')) {
+            document.getElementById('setting-gemini-key').value = settings.gemini_api_key || '';
+        }
+        if (document.getElementById('setting-openai-key')) {
+            document.getElementById('setting-openai-key').value = settings.openai_api_key || '';
+        }
+        if (document.getElementById('setting-images-count')) {
+            document.getElementById('setting-images-count').value = settings.images_per_position || 30;
+        }
         if (document.getElementById('setting-suffix')) {
             document.getElementById('setting-suffix').value = settings.search_suffix || 'Single Person Asian';
         }
@@ -604,15 +811,12 @@ async function loadSettings() {
         if (document.getElementById('setting-local-sd-url')) {
             document.getElementById('setting-local-sd-url').value = settings.local_sd_url || 'http://127.0.0.1:7860';
         }
-        document.getElementById('setting-delay').value = settings.download_delay || 2;
-
-        const detector = await API.getDetectorStatus();
-        const engineEl = document.getElementById('settings-vision-engine');
-        if (engineEl) {
-            engineEl.textContent = detector.active_engine || 'Free Vision (Auto)';
+        if (document.getElementById('setting-delay')) {
+            document.getElementById('setting-delay').value = settings.download_delay || 3;
         }
 
         checkLocalSDStatus();
+        checkDetectorEngine();
     } catch (err) {
         console.error('Settings load error:', err);
     }
@@ -625,23 +829,39 @@ async function checkLocalSDStatus() {
     el.style.color = 'var(--text-muted)';
     try {
         const res = await API.getLocalSDStatus();
-        el.textContent = res.status;
-        el.style.color = res.online ? '#4ade80' : '#f87171';
+        if (res.status === 'ok') {
+            el.textContent = `🟢 Connected (${res.checkpoint || 'Ready'})`;
+            el.style.color = 'var(--accent-green)';
+        } else {
+            el.textContent = `🔴 Offline (${res.error || 'Cannot connect'})`;
+            el.style.color = 'var(--accent-red)';
+        }
     } catch (e) {
-        el.textContent = 'Offline';
-        el.style.color = '#f87171';
+        el.textContent = '🔴 Offline';
+        el.style.color = 'var(--accent-red)';
+    }
+}
+
+async function checkDetectorEngine() {
+    const el = document.getElementById('settings-vision-engine');
+    if (!el) return;
+    try {
+        const res = await API.getDetectorStatus();
+        el.textContent = res.active_engine;
+    } catch (e) {
+        el.textContent = 'Unknown';
     }
 }
 
 async function saveSettings() {
     const data = {
-        gemini_api_key: document.getElementById('setting-gemini-key').value,
-        openai_api_key: document.getElementById('setting-openai-key').value,
-        images_per_position: parseInt(document.getElementById('setting-images-count').value),
+        gemini_api_key: document.getElementById('setting-gemini-key')?.value || '',
+        openai_api_key: document.getElementById('setting-openai-key')?.value || '',
+        images_per_position: parseInt(document.getElementById('setting-images-count')?.value || '30'),
         search_suffix: document.getElementById('setting-suffix')?.value || 'Single Person Asian',
         only_ai_person: document.getElementById('setting-only-ai')?.checked ?? false,
         local_sd_url: document.getElementById('setting-local-sd-url')?.value || 'http://127.0.0.1:7860',
-        download_delay: parseInt(document.getElementById('setting-delay').value),
+        download_delay: parseInt(document.getElementById('setting-delay')?.value || '3'),
     };
 
     try {
@@ -652,9 +872,6 @@ async function saveSettings() {
         showToast('Failed to save settings', 'error');
     }
 }
-
-
-
 
 // ============================================================
 // Logs
@@ -683,6 +900,7 @@ function renderLogs() {
 // ============================================================
 function showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
+    if (!container) return;
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.innerHTML = `
@@ -710,6 +928,7 @@ function escapeHtml(str) {
 }
 
 function escapeAttr(str) {
+    if (!str) return '';
     return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
 }
 

@@ -319,6 +319,27 @@ function selectSource(source) {
     document.querySelectorAll('.source-tab').forEach(tab => {
         tab.classList.toggle('active', tab.dataset.source === source);
     });
+
+    // Toggle Local SD Model Selector
+    const modelGroup = document.getElementById('local-sd-model-group');
+    if (modelGroup) {
+        modelGroup.style.display = (source === 'ai_local_sd') ? 'block' : 'none';
+    }
+}
+
+const modelDescriptions = {
+    'realvisxl': '💡 <b>RealVisXL:</b> Gold standard for natural human skin, authentic Asian portraits, and studio/candid lighting (1024x1024).',
+    'juggernaut': '💡 <b>Juggernaut XL:</b> Specialist for workplace settings, uniforms, factory/office environments, and tools (1024x1024).',
+    'realistic_vision': '💡 <b>Realistic Vision v6.0:</b> Ultra-fast photorealism generating crisp portraits in just 2–4 seconds (512x512).',
+    'epicrealism': '💡 <b>EpiCRealism:</b> Candid documentary-style workplace photography with authentic natural lighting.'
+};
+
+function onModelSelectChange() {
+    const val = document.getElementById('local-sd-model')?.value || 'realvisxl';
+    const descEl = document.getElementById('model-desc-text');
+    if (descEl && modelDescriptions[val]) {
+        descEl.innerHTML = modelDescriptions[val];
+    }
 }
 
 async function startScrape() {
@@ -337,8 +358,10 @@ async function startScrape() {
     }
 
     try {
+        const localSdModel = document.getElementById('local-sd-model')?.value || 'realvisxl';
         const result = await API.startScrape({
             source: state.selectedSource,
+            local_sd_model: localSdModel,
             positions: positionIds,
             count: count,
             search_suffix: searchSuffix,

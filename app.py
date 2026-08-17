@@ -248,11 +248,13 @@ def api_scrape_start():
             delay=max(delay, 3),
         )
     elif source == "ai_local_sd":
+        local_sd_model = data.get("local_sd_model", "realvisxl")
         active_scraper = AIImageGenerator(
             provider="local_sd",
             api_key="",
             delay=max(delay, 1),
             local_sd_url=settings.get("local_sd_url", "http://127.0.0.1:7860"),
+            local_sd_model=local_sd_model,
         )
     else:
         return jsonify({"error": f"Unknown source: {source}"}), 400
@@ -488,6 +490,29 @@ def api_stats():
         "total_images": total_images,
         "positions_with_images": folders_with_images,
         "scraper_status": scraper_status,
+    })
+
+
+# -------------------------------------------------------------------
+
+@app.route("/api/local_sd/models")
+def get_local_sd_models():
+    """Return available local SD models."""
+    local_sd_url = settings.get("local_sd_url", "http://127.0.0.1:7860").rstrip("/")
+    try:
+        resp = requests.get(f"{local_sd_url}/sdapi/v1/models", timeout=2)
+        if resp.status_code == 200:
+            return jsonify(resp.json())
+    except Exception:
+        pass
+    return jsonify({
+        "current_model": "realvisxl",
+        "models": {
+            "realvisxl": {"name": "🌟 RealVisXL v4.0 (SDXL 1024x1024)", "description": "Gold standard for photorealistic human portraits & Asian personas."},
+            "juggernaut": {"name": "🏢 Juggernaut XL v9 (SDXL 1024x1024)", "description": "Specialist for workplace settings, uniforms, and tools."},
+            "realistic_vision": {"name": "⚡ Realistic Vision v6.0 (SD 1.5 - Fast 3s)", "description": "High-speed photorealistic portraits."},
+            "epicrealism": {"name": "📷 EpiCRealism (SD 1.5 - Candid)", "description": "Candid documentary-style workplace photography."}
+        }
     })
 
 

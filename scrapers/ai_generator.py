@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 class AIImageGenerator(BaseScraper):
     """Generate and download images using AI (Local Stable Diffusion, Gemini Imagen, or OpenAI DALL-E)."""
 
-    def __init__(self, provider: str = "gemini", api_key: str = "", delay: int = 3, local_sd_url: str = "http://127.0.0.1:7860"):
+    def __init__(self, provider: str = "gemini", api_key: str = "", delay: int = 3, local_sd_url: str = "http://127.0.0.1:7860", local_sd_model: str = "realvisxl"):
+        self.local_sd_model = local_sd_model
         """
         Args:
             provider: "local_sd", "gemini", or "openai"
@@ -225,6 +226,7 @@ class AIImageGenerator(BaseScraper):
 
             prompt = self._create_prompt(query, idx)
             payload = {
+                "model": self.local_sd_model,
                 "prompt": f"{prompt}, masterpiece, 8k resolution, photorealistic, cinematic lighting, sharp focus",
                 "negative_prompt": "blurry, low quality, deformed, disfigured, distorted face, bad anatomy, bad hands, extra limbs, watermark, text",
                 "steps": 25,

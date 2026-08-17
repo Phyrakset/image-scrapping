@@ -8,3 +8,10 @@ numpy
 google-generativeai
 openai
 python-dotenv
+
+# Local Stable Diffusion support
+diffusers
+transformers
+accelerate
+fastapi
+uvicorn

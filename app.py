@@ -33,6 +33,8 @@ scrape_results = {}
 settings = {
     "gemini_api_key": config.GEMINI_API_KEY,
     "openai_api_key": config.OPENAI_API_KEY,
+    "openrouter_api_key": getattr(config, "OPENROUTER_API_KEY", ""),
+    "openrouter_profile": "sophy_coder",
     "images_per_position": config.IMAGES_PER_POSITION,
     "search_suffix": config.SEARCH_SUFFIX,
     "only_ai_person": config.ONLY_AI_PERSON,
@@ -255,6 +257,17 @@ def api_scrape_start():
             delay=max(delay, 1),
             local_sd_url=settings.get("local_sd_url", "http://127.0.0.1:7860"),
             local_sd_model=local_sd_model,
+        )
+    elif source == "ai_openrouter":
+        profile_key = data.get("openrouter_profile", "sophy_coder")
+        profiles = getattr(config, "OPENROUTER_PROFILES", {})
+        openrouter_key = data.get("openrouter_key") or (profiles.get(profile_key, {}).get("key") if profile_key in profiles else settings.get("openrouter_api_key"))
+        openrouter_model = data.get("openrouter_model", "google/gemini-2.5-flash-image")
+        active_scraper = AIImageGenerator(
+            provider="openrouter",
+            api_key=openrouter_key,
+            delay=max(delay, 2),
+            openrouter_model=openrouter_model,
         )
     else:
         return jsonify({"error": f"Unknown source: {source}"}), 400

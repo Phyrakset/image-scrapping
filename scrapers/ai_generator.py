@@ -64,6 +64,8 @@ class AIImageGenerator(BaseScraper):
             return self._generate_gemini(query, output_dir, num_images, start_offset=start_offset)
         elif self.provider == "openai":
             return self._generate_openai(query, output_dir, num_images, start_offset=start_offset)
+        elif self.provider == "openrouter":
+            return self._generate_openrouter(query, output_dir, num_images, start_offset=start_offset)
         else:
             raise ValueError(f"Unknown AI provider: {self.provider}")
 
@@ -194,6 +196,87 @@ class AIImageGenerator(BaseScraper):
             raise RuntimeError("openai not installed. Run: pip install openai")
 
         logger.info(f"[AI/OpenAI] Generated {len(downloaded_files)} images for '{query}'")
+        return downloaded_files
+
+    def _generate_openrouter(self, query: str, output_dir: str, num_images: int, start_offset: int = 0) -> list[str]:
+        """Generate images using OpenRouter unified multimodal models (Gemini & OpenAI)."""
+        downloaded_files = []
+        logger.info(f"[AI/OpenRouter] Generating images for '{query}' with model '{self.openrouter_model}' — target: {num_images}")
+        self._progress["message"] = f"[AI/OpenRouter] Generating images for: {query}"
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "HTTP-Referer": "http://localhost:5000",
+            "X-Title": "TverKar Image Scrapping Platform",
+            "Content-Type": "application/json",
+        }
+
+        for idx in range(num_images):
+            if self.is_stopped():
+                break
+
+            file_idx = start_offset + idx + 1
+            self._progress["current_image"] = idx + 1
+            self._progress["message"] = f"[AI/OpenRouter] Generating {idx + 1}/{num_images}: {query} ({self.openrouter_model})"
+
+            try:
+                prompt = self._create_prompt(query, idx)
+                payload = {
+                    "model": self.openrouter_model,
+                    "messages": [
+                        {"role": "user", "content": f"Generate a realistic high-resolution photograph: {prompt}"}
+                    ],
+                }
+
+                resp = requests.post("https://openrouter.ai/api/v1/chat/completions", json=payload, headers=headers, timeout=90)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    choice = data.get("choices", [{}])[0]
+                    msg = choice.get("message", {})
+                    images = msg.get("images", [])
+
+                    saved = False
+                    if images and isinstance(images, list):
+                        for img_item in images:
+                            if isinstance(img_item, dict):
+                                img_url = img_item.get("image_url", {}).get("url", "")
+                                if img_url.startswith("data:image"):
+                                    b64_data = img_url.split(",", 1)[-1]
+                                    img_bytes = base64.b64decode(b64_data)
+                                    file_name = f"{file_idx:03d}.png"
+                                    file_path = os.path.join(output_dir, file_name)
+                                    with open(file_path, "wb") as f:
+                                        f.write(img_bytes)
+                                    downloaded_files.append(file_path)
+                                    logger.info(f"[AI/OpenRouter] Generated image {file_idx}: {file_path}")
+                                    saved = True
+                                    break
+                                elif img_url.startswith("http"):
+                                    img_resp = requests.get(img_url, timeout=30)
+                                    if img_resp.status_code == 200:
+                                        file_name = f"{file_idx:03d}.png"
+                                        file_path = os.path.join(output_dir, file_name)
+                                        with open(file_path, "wb") as f:
+                                            f.write(img_resp.content)
+                                        downloaded_files.append(file_path)
+                                        logger.info(f"[AI/OpenRouter] Downloaded image {file_idx}: {file_path}")
+                                        saved = True
+                                        break
+                    if not saved:
+                        logger.warning(f"[AI/OpenRouter] No image returned in message payload for {query}: {msg.get('content')}")
+                        self._progress["failed"] += 1
+                else:
+                    logger.error(f"[AI/OpenRouter] HTTP {resp.status_code}: {resp.text[:200]}")
+                    self._progress["failed"] += 1
+            except Exception as e:
+                logger.error(f"[AI/OpenRouter] Generation error on {query}: {e}")
+                self._progress["failed"] += 1
+                continue
+
+            if self.delay > 0 and idx < num_images - 1:
+                time.sleep(self.delay)
+
+        logger.info(f"[AI/OpenRouter] Completed generation of {len(downloaded_files)} images for '{query}'")
         return downloaded_files
 
     def _generate_local_sd(self, query: str, output_dir: str, num_images: int, start_offset: int = 0) -> list[str]:

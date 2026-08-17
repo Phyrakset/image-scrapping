@@ -135,9 +135,13 @@ async function loadDashboard() {
         const stats = await API.getStats();
         state.stats = stats;
 
-        document.getElementById('stat-total-positions').textContent = stats.total_positions || 0;
-        document.getElementById('stat-total-images').textContent = stats.total_images || 0;
-        document.getElementById('stat-positions-with-images').textContent = stats.positions_with_images || 0;
+        const elPos = document.getElementById('stat-positions') || document.getElementById('stat-total-positions');
+        const elImg = document.getElementById('stat-images') || document.getElementById('stat-total-images');
+        const elFolders = document.getElementById('stat-folders') || document.getElementById('stat-positions-with-images');
+
+        if (elPos) elPos.textContent = stats.total_positions ?? 0;
+        if (elImg) elImg.textContent = stats.total_images ?? 0;
+        if (elFolders) elFolders.textContent = stats.positions_with_images ?? 0;
 
         updateStatusBadge(stats.scraper_status || 'idle');
     } catch (err) {
@@ -146,10 +150,10 @@ async function loadDashboard() {
 }
 
 function updateStatusBadge(status) {
-    const badge = document.getElementById('stat-scraper-status');
+    const badge = document.getElementById('stat-status') || document.getElementById('stat-scraper-status');
     if (!badge) return;
 
-    badge.className = `status-badge ${status}`;
+    badge.className = `stat-value status-badge ${status}`;
     const labels = {
         idle: 'IDLE',
         running: 'RUNNING',

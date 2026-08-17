@@ -236,6 +236,7 @@ class AIImageGenerator(BaseScraper):
                     "messages": [
                         {"role": "user", "content": f"Generate a realistic high-resolution photograph: {prompt}"}
                     ],
+                    "max_tokens": 1024,
                 }
 
                 resp = requests.post("https://openrouter.ai/api/v1/chat/completions", json=payload, headers=headers, timeout=90)

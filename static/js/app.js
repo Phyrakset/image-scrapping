@@ -328,7 +328,9 @@ function selectSource(source) {
 }
 
 const modelDescriptions = {
-    'realvisxl': '💡 <b>RealVisXL:</b> Gold standard for natural human skin, authentic Asian portraits, and studio/candid lighting (1024x1024).',
+    'majicmix': '💡 <b>MajicMIX Realistic v7:</b> Top specialized model for natural Asian skin, authentic facial features, and realistic worker uniforms.',
+    'flux_schnell': '💡 <b>FLUX.1 [schnell]:</b> 12B Flow Transformer (World #1). Flawless hands, lifelike anatomy, and DSLR realism.',
+    'realvisxl': '💡 <b>RealVisXL:</b> Gold standard for studio lighting and DSLR portraits (1024x1024).',
     'juggernaut': '💡 <b>Juggernaut XL:</b> Specialist for workplace settings, uniforms, factory/office environments, and tools (1024x1024).',
     'realistic_vision': '💡 <b>Realistic Vision v6.0:</b> Ultra-fast photorealism generating crisp portraits in just 2–4 seconds (512x512).',
     'epicrealism': '💡 <b>EpiCRealism:</b> Candid documentary-style workplace photography with authentic natural lighting.'

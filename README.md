@@ -1,34 +1,43 @@
 # 📸 TverKar Image Scrapping & Photorealistic AI Generation Platform
 
-A full-stack, automated image scraping and local photorealistic AI generation platform built for assembling curated workplace and persona datasets.
+A full-stack, enterprise-grade automated image dataset collection and photorealistic AI generation platform designed for assembling curated workplace, persona, and job-position image datasets.
 
-Supports **Local GPU Diffusion Models** (**Juggernaut XL**, **RealVisXL**, **MajicMIX**, **EpiCRealism**, **Realistic Vision**), **Pinterest**, **Google Images**, **Google Gemini Imagen**, and **OpenAI DALL-E 3**.
+Supports **OpenRouter Multi-Key Cloud Generation** (*Gemini 2.5/3.1 Flash Image*, *OpenAI GPT-5 Image*), **Local GPU Diffusion Hot-Swapping** (*Juggernaut XL*, *RealVisXL*, *MajicMIX*, *EpiCRealism*, *Realistic Vision*), **Google Images (Playwright Headless)**, **Pinterest Scraper**, **Google Gemini Imagen**, and **OpenAI DALL-E 3**.
 
 ---
 
 ## 🌟 Key Features
 
-- 🎨 **Unified Local Photorealistic AI Engine**:
-  - Standalone high-performance microservice (`sd_server.py`) wrapping HuggingFace Diffusers.
-  - **Dynamic On-Demand Hot-Swapping:** Switch models directly from the Web UI with zero VRAM conflicts.
-  - **Pre-configured SOTA Models:**
-    - 🏢 **Juggernaut XL v9 (SDXL 1024×1024):** Workplace environments, uniforms, tools, and industrial machines.
-    - 🌟 **RealVisXL v4.0 (SDXL 1024×1024):** High-resolution DSLR human skin texture, pores, and authentic Asian portraits.
-    - 🌸 **MajicMIX Realistic v7 (SD 1.5):** Specialized East/Southeast Asian persona and worker portraits.
-    - 📷 **EpiCRealism (SD 1.5):** Unposed, natural-light documentary photography.
-    - ⚡ **Realistic Vision v6.0 (SD 1.5):** Ultra-fast generation (2–4s per image).
-- 📸 **Pro DSLR Documentary Prompt Engine**:
-  - Automatically generates natural daylight, unposed action shots, authentic work uniforms, and real skin textures while strictly filtering out plastic/CGI/3D AI artifacts.
-- 🤖 **AI-Generated Person Filter (Vision Engine)**:
-  - Built-in 2D Fourier Spectrum (FFT) texture analyzer + local Ollama and Gemini/OpenAI vision detection to filter out real human photos and keep only synthetic personas.
-- 📦 **1-Click Gallery & ZIP Downloads**:
-  - Direct *"View in Gallery"* shortcut right from the scrape progress card.
-  - 1-click **Download All (.ZIP)** to download any position's image batch straight to your computer.
-  - Smart sorting (*"Recently Generated"*, *Name*, *Count*) and instant search filter.
-- 📌 **Multi-Source Scraping**:
-  - Pinterest (`pinterest-dl` with browser fallback).
-  - Google Images (automated Chromium Playwright).
-  - Cloud AI (Gemini Imagen 3 & OpenAI DALL-E 3).
+### 🌐 1. Cloud AI Image Generation via OpenRouter (Multi-Key Profiles)
+- **Unified Multi-Account Key Pool:** Switch seamlessly between multiple OpenRouter accounts (`sophy_coder`, `aht50712`, `asp25035`, `openrouter_default`, `sophyset2016`) directly from the Web UI to bypass rate limits and distribute usage.
+- **Multimodal State-of-the-Art Models:**
+  - 🌟 **Google Gemini 2.5 Flash Image** (`google/gemini-2.5-flash-image`): Google's premier multimodal model for hyper-realistic visual fidelity.
+  - ⚡ **Google Gemini 3.1 Flash Image** (`google/gemini-3.1-flash-image`): Next-gen ultra-fast cloud generation.
+  - 🤖 **OpenAI GPT-5 Image / Mini** (`openai/gpt-5-image`, `openai/gpt-5-image-mini`): High-resolution detailed realistic worker scenarios.
+- **Token & Credit Optimization:** Auto-configured with constrained `max_tokens` (256) to ensure 100% compliance with free-tier token reservation policies.
+- **Multi-Format Image Extraction:** Parses both embedded base64 data URIs and external CDN URLs automatically.
+
+### 🎨 2. Unified Local Photorealistic AI Engine (`sd_server.py`)
+- Standalone FastAPI microservice wrapping HuggingFace Diffusers with CUDA acceleration.
+- **Zero VRAM Conflict Hot-Swapping:** Switch models dynamically from the Web UI with automated VRAM cache garbage collection.
+- **100% Open & Un-gated Models (No HF token required):**
+  - 🏢 **Juggernaut XL v9 (SDXL 1024×1024):** Factory uniforms, industrial equipment, safety gear, and warehouse tools.
+  - 🌟 **RealVisXL v4.0 (SDXL 1024×1024):** High-resolution DSLR human skin textures, realistic pores, and authentic Asian portraits.
+  - 🌸 **MajicMIX Realistic v7 (SD 1.5):** Specialized East/Southeast Asian persona and worker portraits.
+  - 📷 **EpiCRealism (SD 1.5):** Unposed, natural daylight documentary photography.
+  - ⚡ **Realistic Vision v6.0 (SD 1.5):** Ultra-fast generation (2–4s per image).
+
+### 📸 3. Pro DSLR Documentary Prompt Engine
+- Automatically constructs authentic prompts tailored for documentary photography (35mm lens, natural daytime window lighting, genuine human skin texture, real work uniforms, natural postures).
+- Comprehensive negative prompting strictly filtering out CGI, plastic/airbrushed skin, anime, 3D renders, and studio lighting artifacts.
+
+### 🤖 4. AI-Generated Person Filter (Vision Classification)
+- Built-in 2D Fourier Spectrum (FFT) texture analyzer + local Ollama, Gemini Flash, or OpenAI GPT-4o-mini Vision detection to filter out real humans when synthetic-only persona data is required.
+
+### 📦 5. Interactive Dashboard, Instant Gallery & 1-Click ZIP Downloads
+- **Live SSE Progress Stream:** Real-time updates on active scraping/generation jobs, image counters, and error logs.
+- **Gallery Quick-View & Direct ZIP:** 1-click download of all images for any position as a compressed `.zip` archive.
+- **Smart Filtering:** Sort by *"Recently Generated"* (with `✨ Recent` badges), sort by name/count, and filter with instant search.
 
 ---
 
@@ -36,13 +45,19 @@ Supports **Local GPU Diffusion Models** (**Juggernaut XL**, **RealVisXL**, **Maj
 
 ```mermaid
 graph TD
-    A[Web Browser UI / Dashboard] -->|HTTP / SSE Stream| B[Flask Backend App :5000]
-    B -->|Position Queue & Jobs| C[Scrapers & Generators]
-    C -->|Web Scraping| D[Pinterest / Google Playwright]
-    C -->|Cloud API| E[Google Gemini / OpenAI]
-    C -->|REST API :7860| F[Unified SD Server FastAPI]
-    F -->|On-Demand CUDA FP16| G[(Tesla T4 / NVIDIA GPU VRAM)]
-    B -->|Organized Folders| H[(downloads/ Position / 001.png ...)]
+    UI[Web Browser / Glassmorphism Dashboard] -->|HTTP REST / SSE Stream| Flask[Flask Backend App :5000]
+    Flask -->|Queue & Job Dispatcher| Scrapers[Scraper & Generator Engine]
+    
+    subgraph Scraping & Generation Sources
+        Scrapers -->|OpenRouter Cloud API| OpenRouter[OpenRouter Multi-Key Pool\n(Gemini 2.5/3.1, GPT-5)]
+        Scrapers -->|Direct Cloud API| DirectCloud[Gemini Imagen / OpenAI DALL-E 3]
+        Scrapers -->|Chromium Headless| Playwright[Google Images Playwright]
+        Scrapers -->|HTTP API / Browser| Pinterest[Pinterest Scraper]
+        Scrapers -->|HTTP REST :7860| SDServer[Unified SD FastAPI Server]
+    end
+
+    SDServer -->|Dynamic FP16 Hot-Swap| GPU[(NVIDIA GPU VRAM / CUDA)]
+    Flask -->|Organized File Output| Storage[(downloads/<Position_Name>/001.png ...)]
 ```
 
 ---
@@ -50,9 +65,10 @@ graph TD
 ## 🚀 Quick Start Guide
 
 ### System Requirements
+* **OS:** Linux (Ubuntu 20.04+, Debian, WSL2) or macOS / Windows
 * **Python:** 3.10 to 3.12 (Tested on Python 3.12)
 * **GPU (For Local AI Generation):** NVIDIA GPU with 6 GB+ VRAM (Tesla T4, RTX 3060/4060 or higher). CUDA 12.x+.
-* **Disk Space:** 20 GB+ for model weights and downloaded image datasets.
+* **Disk Space:** 20 GB+ for local model weights and downloaded image datasets.
 
 ---
 
@@ -63,151 +79,227 @@ graph TD
 git clone https://github.com/Phyrakset/image-scrapping.git
 cd image-scrapping
 
-# 2. Create and activate a Python 3.12 virtual environment
+# 2. Create and activate a Python virtual environment
 python3 -m venv venv
 source venv/bin/activate       # Linux/macOS
 # .\venv\Scripts\Activate      # Windows PowerShell
 
-# 3. Install dependencies
+# 3. Install Python dependencies
 pip install -r requirements.txt
 
-# 4. Install Playwright Chromium browser
+# 4. Install Playwright Chromium browser binary
 playwright install chromium
 ```
 
 ---
 
-### 2. Running Locally (2 Terminals)
+### 2. Environment Configuration
 
-#### 🖥️ Terminal 1: Start Local AI Model Engine
+Copy `.env.example` to `.env` and configure your API keys and parameters:
+
 ```bash
-source venv/bin/activate
-python sd_server.py --port 7860
+cp .env.example .env
 ```
-> *Loads the default photorealistic model into GPU VRAM and exposes Automatic1111-compatible API endpoints on port `7860`.*
 
-#### 🌐 Terminal 2: Start Web Dashboard
+Edit `.env`:
+```env
+# Flask Server Settings
+FLASK_HOST=0.0.0.0
+FLASK_PORT=5000
+FLASK_DEBUG=True
+
+# OpenRouter Multi-Profile API Keys
+OPENROUTER_KEY_SOPHY_CODER=sk-or-v1-xxxxxxxx
+OPENROUTER_KEY_AHT50712=sk-or-v1-xxxxxxxx
+OPENROUTER_KEY_ASP25035=sk-or-v1-xxxxxxxx
+OPENROUTER_KEY_DEFAULT=sk-or-v1-xxxxxxxx
+OPENROUTER_KEY_SOPHYSET2016=sk-or-v1-xxxxxxxx
+OPENROUTER_API_KEY=sk-or-v1-xxxxxxxx
+
+# Direct AI Cloud Providers (Optional)
+GEMINI_API_KEY=your_gemini_api_key_here
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Local Stable Diffusion Microservice
+LOCAL_SD_URL=http://127.0.0.1:7860
+
+# Scraping Settings
+IMAGES_PER_POSITION=40
+SEARCH_SUFFIX=Single Person Asian
+ONLY_AI_PERSON=false
+DOWNLOAD_DELAY=2
+BASE_DOWNLOAD_DIR=downloads
+POSITION_FILE=position.text
+```
+
+---
+
+### 3. Running the Services
+
+#### Option A: Running with OpenRouter (Cloud Mode — No Local GPU Required)
 ```bash
 source venv/bin/activate
 python app.py
 ```
-> *Starts the Flask web dashboard on `http://0.0.0.0:5000`.*
+> Open `http://localhost:5000` in your browser, switch to the **OpenRouter (Cloud)** tab, select your account profile and model, and begin generating.
 
-#### ☁️ Remote Cloud Access (Optional):
-If running on a remote GCP/AWS VM, create an instant secure tunnel:
+#### Option B: Running with Local GPU Diffusion (Local SD Mode)
+Open two terminal tabs:
+
+**Terminal 1 — Local Diffusion Engine (Port 7860):**
+```bash
+source venv/bin/activate
+python sd_server.py --port 7860
+```
+
+**Terminal 2 — Flask Web Dashboard (Port 5000):**
+```bash
+source venv/bin/activate
+python app.py
+```
+
+#### Option C: Remote Access via Cloudflare Tunnel (Remote GCP/AWS VM)
 ```bash
 npx cloudflared tunnel --url http://localhost:5000
 ```
-Open the generated `https://...trycloudflare.com` URL in your browser.
+Open the printed `https://<unique-id>.trycloudflare.com` URL in your browser.
 
 ---
 
 ## 📖 User Guide
 
-### 1. Generating Images via Local AI
+### 1. Generating via OpenRouter Cloud Models
 1. Navigate to **Scrape Images** on the sidebar.
-2. Select the **🖥️ Local SD (Free)** tab.
-3. In the **Local AI Diffusion Model** dropdown, pick your desired model:
-   * **`🏢 Juggernaut XL v9`**: Best for factory uniforms, industrial equipment, safety gear, and warehouse tools.
-   * **`🌟 RealVisXL v4.0`**: Best for ultra-photorealistic skin pores, authentic eyes, and natural portraits.
-   * **`🌸 MajicMIX Realistic v7`**: Best for specialized Asian workforce portraits.
-   * **`⚡ Realistic Vision v6.0`**: Best for high-speed generation (3 seconds).
-4. Set **Target Images per Position** (e.g. `4` or `40`).
-5. Choose positions using **Target Incomplete Positions Only** or select specific positions in the **Positions** tab.
+2. Select the **🌐 OpenRouter (Cloud)** tab.
+3. Choose your **OpenRouter Account Key** from the profile dropdown (e.g., `Sophy Coder`, `aht50712`, etc.).
+4. Select your **Cloud Model** (`Google Gemini 2.5 Flash Image`, `Gemini 3.1 Flash Image`, or `OpenAI GPT-5 Image`).
+5. Choose positions or check **Target Incomplete Positions Only**.
 6. Click **▶️ Start Scraping**.
 
-### 2. Viewing & Downloading Results
-* **Instant Shortcut:** When generation finishes, click **"🖼️ View in Gallery"** or **"⬇️ Download ZIP"** right on the Progress card.
-* **Gallery Page:**
-  * **🕒 Recently Generated:** View your latest generated folders right at the top with a **`✨ Recent`** badge.
-  * **🔍 Search Bar:** Type any keyword (e.g., `"technician"`) to instantly filter folders.
-  * **⬇️ ZIP Download:** Download all images of any position in a single `.zip` file.
-  * **📋 Copy Folder Path:** Click to copy the exact disk folder path (`downloads/<Position>/`) to your clipboard.
+### 2. Generating via Local GPU Diffusion
+1. Select the **🖥️ Local SD (Free)** tab.
+2. Select your desired local model (`Juggernaut XL v9`, `RealVisXL v4.0`, `MajicMIX Realistic v7`, `EpiCRealism`, `Realistic Vision v6.0`).
+3. Set your target image count and click **▶️ Start Scraping**.
+
+### 3. Managing Position Lists
+- Go to the **Positions** tab on the sidebar.
+- Add new job titles or positions one by one.
+- View per-position image counts, completion percentages, and missing counts.
+- Delete obsolete positions.
+
+### 4. Viewing & Exporting Datasets
+- Go to the **Gallery** tab.
+- Click **⬇️ Download ZIP** on any position card to download all images as a `.zip` archive.
+- Click **📋 Copy Path** to copy the exact server directory path for model training scripts.
 
 ---
 
-## 💻 Developer Guide
+## 💻 Developer & API Reference
 
-### Project Directory Layout
+### Project Directory Structure
 
 ```
 image-scrapping/
-├── app.py                      # Flask API backend server & Web UI routes
-├── sd_server.py                # Standalone FastAPI Diffusion Microservice (diffusers)
-├── config.py                   # Global configuration & environment constants
-├── requirements.txt            # Python package dependencies
-├── position.text               # Preloaded list of job titles / positions
+├── app.py                      # Flask API server, routes, SSE streaming, & gallery endpoints
+├── sd_server.py                # Standalone FastAPI Diffusion Microservice (Hugging Face diffusers)
+├── config.py                   # Environment config loader, OpenRouter profile registry
+├── requirements.txt            # Python dependencies
+├── position.text               # Preloaded newline-delimited job titles list
+├── .env.example                # Example environment configuration template
 ├── scrapers/
-│   ├── base_scraper.py         # Abstract base scraper interface
-│   ├── ai_generator.py         # AI Prompt engine & generation dispatcher
-│   ├── ai_detector.py          # AI vs Real Person vision classifier
-│   ├── pinterest_scraper.py    # Pinterest scraper implementation
-│   └── google_scraper.py       # Google Playwright browser scraper
+│   ├── base_scraper.py         # Abstract BaseScraper class with progress tracking & stopping
+│   ├── ai_generator.py         # AI generation engine (OpenRouter, Local SD, Gemini, OpenAI)
+│   ├── ai_detector.py          # Vision classifier & FFT texture analysis for AI vs Real person
+│   ├── pinterest_scraper.py    # Pinterest scraper (pinterest-dl with Playwright fallback)
+│   └── google_scraper.py       # Google Images Playwright headless browser scraper
 ├── templates/
 │   └── index.html              # Dark glassmorphism dashboard UI
 ├── static/
-│   ├── css/style.css           # Modern design tokens & layout stylesheet
-│   └── js/app.js               # Frontend state management, SSE client, & gallery
-└── downloads/                  # Output directory (Organized by position folders)
+│   ├── css/style.css           # Styling, animations, layout tokens
+│   └── js/app.js               # Frontend application state, SSE listener, gallery controller
+└── downloads/                  # Output directory partitioned by position names
 ```
 
 ---
 
-### Adding New AI Models to `sd_server.py`
+### REST API Endpoints
 
-To register a new open-source model from Hugging Face:
+#### Flask Backend (`http://localhost:5000`)
+
+| Method | Endpoint | Description | Request / Query Params |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/stats` | Overall dataset stats (positions, total images, status) | None |
+| `GET` | `/api/positions` | Position list with downloaded/missing stats | `?target=40` |
+| `POST` | `/api/positions` | Add a new position | `{"name": "Civil Engineer"}` |
+| `DELETE` | `/api/positions/<id>` | Delete position by index ID | None |
+| `POST` | `/api/scrape/start` | Start scraping or AI generation job | `{"source": "ai_openrouter", "openrouter_profile": "sophy_coder", "openrouter_model": "google/gemini-2.5-flash-image", "count": 40}` |
+| `POST` | `/api/scrape/stop` | Gracefully stop the current active job | None |
+| `GET` | `/api/scrape/status` | Current scraper status and progress counters | None |
+| `GET` | `/api/scrape/stream` | Server-Sent Events (SSE) stream for live UI progress | None |
+| `GET` | `/api/images` | Overview of all folders with previews and counts | None |
+| `GET` | `/api/images/<path:position>` | List all image file URLs for a specific position | None |
+| `GET` | `/api/download_zip/<path:position>` | Stream zip archive of all images in that folder | None |
+| `GET` | `/api/settings` | Read current runtime configuration (masked keys) | None |
+| `POST` | `/api/settings` | Update runtime settings | `{"images_per_position": 40, ...}` |
+| `GET` | `/api/local_sd/status` | Health check for local SD FastAPI microservice | None |
+
+#### Local Diffusion Microservice (`http://localhost:7860`)
+
+| Method | Endpoint | Description | Payload |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/sdapi/v1/models` | List all available and active GPU models | None |
+| `GET` | `/sdapi/v1/options` | Healthcheck and current loaded checkpoint | None |
+| `POST` | `/sdapi/v1/switch_model` | Hot-swap active model in VRAM | `{"model": "juggernaut"}` |
+| `POST` | `/sdapi/v1/txt2img` | Generate images via Automatic1111-compatible API | `{"prompt": "...", "model": "realvisxl", "width": 1024, "height": 1024, "steps": 25}` |
+
+---
+
+### Adding a New Model to `sd_server.py`
+
+To register a new Hugging Face diffusion model:
 
 1. Open [`sd_server.py`](file:///home/jupyter/WORKINGNA/image-scrapping/sd_server.py).
-2. Add your model to the `AVAILABLE_MODELS` dictionary:
-
+2. Add the model definition to `AVAILABLE_MODELS`:
 ```python
 AVAILABLE_MODELS = {
     "my_custom_model": {
         "name": "✨ My Custom Model (SDXL 1024x1024)",
-        "id": "Organization/Repository-Name",
+        "id": "Author/Model-Repo-Name",
         "type": "sdxl",   # "sdxl" or "sd15"
-        "description": "Short description of model capabilities.",
+        "description": "Photorealistic worker portrait model.",
         "default_width": 1024,
         "default_height": 1024,
         "default_steps": 25,
         "cfg": 6.5,
     },
-    ...
 }
 ```
-
-3. In [`templates/index.html`](file:///home/jupyter/WORKINGNA/image-scrapping/templates/index.html), add the `<option>` into `#local-sd-model`:
+3. Add the corresponding `<option>` tag in [`templates/index.html`](file:///home/jupyter/WORKINGNA/image-scrapping/templates/index.html):
 ```html
 <option value="my_custom_model">✨ My Custom Model (SDXL 1024×1024)</option>
 ```
 
 ---
 
-### Key API Endpoints
+## 🛠️ Troubleshooting & FAQ
 
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/stats` | Returns total positions, downloaded images, and completed folders count. |
-| `GET` | `/api/positions?target=40` | Returns position list with completion and missing image calculations. |
-| `POST` | `/api/scrape/start` | Starts background scraping/generation with specified source & model. |
-| `POST` | `/api/scrape/stop` | Gracefully stops the active scraping thread. |
-| `GET` | `/api/scrape/stream` | Server-Sent Events (SSE) stream providing real-time progress events. |
-| `GET` | `/api/images` | Lists all downloaded folders with image counts, modified timestamps, and previews. |
-| `GET` | `/api/images/<path:position>` | Returns full list of image URLs in a specific position folder. |
-| `GET` | `/api/download_zip/<path:position>` | Streams a `.zip` archive containing all images in that folder. |
-| `GET` | `/sdapi/v1/models` *(Port 7860)* | Returns registered diffusion models and current active GPU model. |
-| `POST` | `/sdapi/v1/txt2img` *(Port 7860)* | Generates image batch with dynamic on-demand model hot-swapping. |
+### 1. OpenRouter Credit / Token Reservation Error
+* **Symptom:** `HTTP 402 / 400: Your account does not have enough credits to generate max_tokens`.
+* **Fix:** The codebase automatically sets `"max_tokens": 256` in [`scrapers/ai_generator.py`](file:///home/jupyter/WORKINGNA/image-scrapping/scrapers/ai_generator.py#L240), preventing large upfront token reservations on free/low-balance keys.
 
----
+### 2. Local SD Microservice Connection Refused
+* **Symptom:** `Cannot connect to Local Stable Diffusion on http://127.0.0.1:7860`.
+* **Fix:** Ensure `python sd_server.py --port 7860` is running in an active terminal with CUDA available. Verify with `curl http://127.0.0.1:7860/sdapi/v1/options`.
 
-## 🛠️ Performance & VRAM Optimization
+### 3. CUDA Out of Memory (OOM) on Low-VRAM GPUs
+* **Fix:** When running SDXL models on GPUs with < 8GB VRAM, the engine uses `torch.float16` and enables attention slicing (`pipe.enable_attention_slicing()`). Alternatively, select SD 1.5 models (`MajicMIX`, `Realistic Vision`, or `EpiCRealism`) which only consume ~3.2 GB VRAM.
 
-* **FP16 Half Precision:** Loaded in `torch.float16` to halve VRAM requirements (~6.5 GB for SDXL, ~3.2 GB for SD 1.5).
-* **Attention Slicing (`pipe.enable_attention_slicing()`):** Reduces peak VRAM spikes during cross-attention calculation.
-* **Automatic Garbage Collection:** Calls `del pipe`, `torch.cuda.empty_cache()`, and `gc.collect()` before loading a new model to ensure zero memory fragmentation.
+### 4. Playwright Browser Not Found
+* **Symptom:** `playwright._impl._errors.Error: Executable doesn't exist`.
+* **Fix:** Run `playwright install chromium` inside your virtual environment.
 
 ---
 
 ## 📄 License
 
-MIT License. Developed for internal research and automated dataset assembly.
+MIT License. Developed for automated AI dataset generation and visual research.

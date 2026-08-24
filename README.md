@@ -45,19 +45,19 @@ Supports **OpenRouter Multi-Key Cloud Generation** (*Gemini 2.5/3.1 Flash Image*
 
 ```mermaid
 graph TD
-    UI[Web Browser / Glassmorphism Dashboard] -->|HTTP REST / SSE Stream| Flask[Flask Backend App :5000]
-    Flask -->|Queue & Job Dispatcher| Scrapers[Scraper & Generator Engine]
+    UI["Web Browser / Dashboard"] -->|HTTP REST / SSE Stream| Flask["Flask Backend App (:5000)"]
+    Flask -->|Queue & Job Dispatcher| Scrapers["Scraper & Generator Engine"]
     
-    subgraph Scraping & Generation Sources
-        Scrapers -->|OpenRouter Cloud API| OpenRouter[OpenRouter Multi-Key Pool\n(Gemini 2.5/3.1, GPT-5)]
-        Scrapers -->|Direct Cloud API| DirectCloud[Gemini Imagen / OpenAI DALL-E 3]
-        Scrapers -->|Chromium Headless| Playwright[Google Images Playwright]
-        Scrapers -->|HTTP API / Browser| Pinterest[Pinterest Scraper]
-        Scrapers -->|HTTP REST :7860| SDServer[Unified SD FastAPI Server]
+    subgraph Sources ["Scraping & Generation Sources"]
+        Scrapers -->|OpenRouter Cloud API| OpenRouter["OpenRouter Multi-Key Pool<br/>(Gemini 2.5 / 3.1, GPT-5)"]
+        Scrapers -->|Direct Cloud API| DirectCloud["Gemini Imagen / OpenAI DALL-E 3"]
+        Scrapers -->|Chromium Headless| Playwright["Google Images Playwright"]
+        Scrapers -->|HTTP API / Browser| Pinterest["Pinterest Scraper"]
+        Scrapers -->|HTTP REST :7860| SDServer["Unified SD FastAPI Server"]
     end
 
-    SDServer -->|Dynamic FP16 Hot-Swap| GPU[(NVIDIA GPU VRAM / CUDA)]
-    Flask -->|Organized File Output| Storage[(downloads/<Position_Name>/001.png ...)]
+    SDServer -->|Dynamic FP16 Hot-Swap| GPU[("NVIDIA GPU VRAM / CUDA")]
+    Flask -->|Organized File Output| Storage[("downloads/Position/001.png")]
 ```
 
 ---

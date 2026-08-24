@@ -391,10 +391,20 @@ function selectSource(source) {
         tab.classList.toggle('active', tab.dataset.source === source);
     });
 
-    const modelGroup = document.getElementById('local-sd-model-group');
-    if (modelGroup) {
-        modelGroup.style.display = (source === 'ai_local_sd') ? 'block' : 'none';
+    const sdGroup = document.getElementById('local-sd-model-group');
+    if (sdGroup) {
+        sdGroup.style.display = (source === 'ai_local_sd') ? 'block' : 'none';
     }
+
+    const openrouterGroup = document.getElementById('openrouter-config-group');
+    if (openrouterGroup) {
+        openrouterGroup.style.display = (source === 'ai_openrouter') ? 'block' : 'none';
+    }
+}
+
+function onOpenRouterProfileChange() {
+    const profile = document.getElementById('openrouter-profile')?.value || 'sophy_coder';
+    showToast(`Switched to OpenRouter profile: ${profile}`, 'info');
 }
 
 async function startScrape() {
@@ -403,6 +413,8 @@ async function startScrape() {
     const topUp = document.getElementById('scrape-top-up')?.checked ?? true;
     const onlyAiPerson = document.getElementById('scrape-only-ai')?.checked ?? true;
     const localSdModel = document.getElementById('local-sd-model')?.value || 'realvisxl';
+    const openrouterProfile = document.getElementById('openrouter-profile')?.value || 'sophy_coder';
+    const openrouterModel = document.getElementById('openrouter-model')?.value || 'google/gemini-2.5-flash-image';
 
     const positionIds = state.selectedPositions.size > 0
         ? Array.from(state.selectedPositions)
@@ -417,6 +429,8 @@ async function startScrape() {
         const result = await API.startScrape({
             source: state.selectedSource,
             local_sd_model: localSdModel,
+            openrouter_profile: openrouterProfile,
+            openrouter_model: openrouterModel,
             positions: positionIds,
             count: count,
             search_suffix: searchSuffix,

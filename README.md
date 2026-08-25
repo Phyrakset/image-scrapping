@@ -80,9 +80,9 @@ git clone https://github.com/Phyrakset/image-scrapping.git
 cd image-scrapping
 
 # 2. Create and activate a Python virtual environment
-python3 -m venv venv
-source venv/bin/activate       # Linux/macOS
-# .\venv\Scripts\Activate      # Windows PowerShell
+python3 -m venv .venv
+source .venv/bin/activate       # Linux/macOS
+# .\.venv\Scripts\Activate      # Windows PowerShell
 
 # 3. Install Python dependencies
 pip install -r requirements.txt
@@ -138,7 +138,7 @@ POSITION_FILE=position.text
 
 #### Option A: Running with OpenRouter (Cloud Mode — No Local GPU Required)
 ```bash
-source venv/bin/activate
+source .venv/bin/activate
 python app.py
 ```
 > Open `http://localhost:5000` in your browser, switch to the **OpenRouter (Cloud)** tab, select your account profile and model, and begin generating.
@@ -148,13 +148,13 @@ Open two terminal tabs:
 
 **Terminal 1 — Local Diffusion Engine (Port 7860):**
 ```bash
-source venv/bin/activate
+source .venv/bin/activate
 python sd_server.py --port 7860
 ```
 
 **Terminal 2 — Flask Web Dashboard (Port 5000):**
 ```bash
-source venv/bin/activate
+source .venv/bin/activate
 python app.py
 ```
 

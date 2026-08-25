@@ -5,7 +5,7 @@ echo ============================================
 echo.
 
 echo [1/4] Activating virtual environment...
-call venv\Scripts\activate
+call .venv\Scripts\activate
 
 echo [2/4] Installing Python dependencies...
 pip install -r requirements.txt
